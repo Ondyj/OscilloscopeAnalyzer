@@ -11,7 +11,7 @@ class Program
             SignalLoader loader = new SignalLoader();
             loader.LoadCsvFile(filePathCSV);
 
-            loader.PrintSignalData(); // Výpis prvních 10 vzorků signálu
+            loader.PrintSignalData(); // Vypis prvnich 10 vzorku signalu
         } catch (Exception ex) {
             Console.WriteLine($"Chyba: {ex.Message}");
         }
