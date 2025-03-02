@@ -37,7 +37,7 @@ namespace OscilloscopeGUI {
 
                     // Vykresleni signalu v grafu
                     plot.Plot.Clear();
-                    plot.Plot.Add.Scatter(time.ToArray(), voltage.ToArray());
+                    plot.Plot.Add.Signal(voltage.ToArray());
                     plot.Refresh();
                 }
                 catch (Exception ex) {
