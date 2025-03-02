@@ -1,0 +1,15 @@
+﻿<Window x:Class="OscilloscopeGUI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:OscilloscopeGUI"
+        xmlns:ScottPlot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
+        mc:Ignorable="d"
+        Title="Oscilloscope Analyzer" Height="450" Width="800">
+    
+    <Grid>
+        <Button Content="Načíst CSV" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top" Width="100" Click="LoadCsv_Click"/>
+        <ScottPlot:WpfPlot Name="plot" HorizontalAlignment="Left" Height="400" Margin="10,50,0,0" VerticalAlignment="Top" Width="760"/>
+    </Grid>
+</Window>
