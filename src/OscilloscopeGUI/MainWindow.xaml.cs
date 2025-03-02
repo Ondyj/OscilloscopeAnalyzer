@@ -14,30 +14,38 @@ namespace OscilloscopeGUI {
         }
 
         // Handler pro kliknuti na tlacitko "Nacist CSV"
-        private void LoadCsv_Click(object sender, RoutedEventArgs e) {
-            // Otevreni dialogu pro vyber CSV souboru
+        private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
             OpenFileDialog openFileDialog = new OpenFileDialog {
                 Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
             };
 
             if (openFileDialog.ShowDialog() == true) {
                 try {
-                    // Nacteni dat ze souboru pomoci SignalLoader
+                    // Nacteni dat
                     SignalLoader loader = new SignalLoader();
-                    loader.LoadCsvFile(openFileDialog.FileName);
+                    await Task.Run(() => loader.LoadCsvFile(openFileDialog.FileName));
 
-                    // Priprava dat pro vykresleni
-                    List<double> time = loader.SignalData.Select(t => t.Item1).ToList();
-                    List<double> voltage = loader.SignalData.Select(v => v.Item2).ToList();
-
-                    if (time.Count == 0 || voltage.Count == 0) {
+                    if (loader.SignalData.Count == 0) {
                         MessageBox.Show("Soubor neobsahuje zadna platna data.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
                         return;
                     }
 
-                    // Vykresleni signalu v grafu
+                    // Vymazani predchoziho grafu
                     plot.Plot.Clear();
-                    plot.Plot.Add.Signal(voltage.ToArray());
+
+                    // Vykresleni vsech signalu pomoci Add.Signal()
+                    foreach (var channel in loader.SignalData) {
+                        List<double> voltage = channel.Value.Select(v => v.Item2).ToList();
+
+                        // Vypocet vzorkovaci frekvence z casoveho kroku
+                        double sampleRate = 1.0 / loader.TimeIncrement; 
+
+                        // Pridani signalu do grafu
+                        var signalPlot = plot.Plot.Add.Signal(voltage.ToArray(), sampleRate);
+                        signalPlot.LegendText = channel.Key; // Nastaveni legendy
+                    }
+
+                    plot.Plot.Legend.IsVisible = true; // Zapnuti legendy
                     plot.Refresh();
                 }
                 catch (Exception ex) {

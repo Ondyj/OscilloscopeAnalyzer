@@ -10,6 +10,6 @@
     
     <Grid>
         <Button Content="Načíst CSV" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top" Width="100" Click="LoadCsv_Click"/>
-        <ScottPlot:WpfPlot Name="plot" HorizontalAlignment="Left" Height="400" Margin="10,50,0,0" VerticalAlignment="Top" Width="760"/>
+        <ScottPlot:WpfPlot Name="plot" HorizontalAlignment="Left" Height="600" Margin="10,50,0,0" VerticalAlignment="Top" Width="800"/>
     </Grid>
 </Window>
