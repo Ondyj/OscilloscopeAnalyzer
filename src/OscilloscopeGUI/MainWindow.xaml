@@ -6,10 +6,27 @@
         xmlns:local="clr-namespace:OscilloscopeGUI"
         xmlns:ScottPlot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
         mc:Ignorable="d"
-        Title="Oscilloscope Analyzer" Height="450" Width="800">
+        Title="Oscilloscope Analyzer" Height="700" Width="1000">
     
     <Grid>
-        <Button Content="Načíst CSV" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top" Width="100" Click="LoadCsv_Click"/>
-        <ScottPlot:WpfPlot Name="plot" HorizontalAlignment="Left" Height="600" Margin="10,50,0,0" VerticalAlignment="Top" Width="800"/>
+        <!-- Definice radku -->
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  
+            <RowDefinition Height="*"/>     
+        </Grid.RowDefinitions>
+
+        <!-- Tlacitko pro CSV soubor -->
+        <Button Content="Načíst CSV" HorizontalAlignment="Left" Margin="10,5,0,0"
+                VerticalAlignment="Top" Width="100" Click="LoadCsv_Click"/>
+
+        <!-- Informace o osciloskopu - bude nad grafem -->
+        <TextBlock Name="OscilloscopeInfo" Text="Osciloskop: Neznámý" 
+                Margin="10,35,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                FontWeight="Bold" FontSize="14"/>
+
+        <!-- Graf (ScottPlot) -->
+        <ScottPlot:WpfPlot Name="plot" Grid.Row="1" Height="600" Margin="10,10,0,0"
+                        HorizontalAlignment="Left" Width="800"/>
     </Grid>
+
 </Window>
