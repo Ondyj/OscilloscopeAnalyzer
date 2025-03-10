@@ -1,101 +1,98 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Globalization;
 
 namespace OscilloscopeCLI.Data {
     public class SignalLoader {
-        // Ulozeni signalu pro vice kanalu (napr. CH1, CH2) jako seznam casovych a napetovych hodnot
+        // Slovnik pro ukladani signalu, klice jsou nazvy kanalu
         public Dictionary<string, List<Tuple<double, double>>> SignalData { get; private set; } = new();
 
-        // Cas pocatku mereni
-        public double StartTime { get; private set; }
-        
-        // Casovy krok mezi vzorky
-        public double TimeIncrement { get; private set; }
-
+        /// <summary>
+        /// Nacte signalni data z CSV souboru v osciloskopovem formatu.
+        /// </summary>
+        /// <param name="filePath">Cesta k souboru.</param>
         public void LoadCsvFile(string filePath) {
-            // Overeni, zda soubor existuje
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"Soubor {filePath} nebyl nalezen.");
 
-            using (var reader = new StreamReader(filePath)) {
-                string? headerLine = null;
-                string? paramLine = null;
+            SignalData.Clear(); // Vycistime predchozi data
 
-                // Hledani hlavicky souboru obsahujici nazvy kanalu (napr. "X, CH1, CH2, Start, Increment")
-                while (!reader.EndOfStream) {
-                    headerLine = reader.ReadLine();
-                    if (headerLine != null && headerLine.Contains("CH")) {
-                        break;
-                    }
+            var lines = File.ReadAllLines(filePath);
+
+            if (lines.Length < 3)
+                throw new Exception("Soubor nema dostatek radku pro nacteni dat.");
+
+            // Debug!!!!!
+            Console.WriteLine($"Nacitani souboru: {filePath}");
+            Console.WriteLine($"Hlavicka: {lines[0]}");
+            Console.WriteLine($"Metadata: {lines[1]}");
+
+            // Prvni radek - hlavicka (napr. X,CH1,CH2,Start,Increment)
+            var headers = lines[0].Split(',');
+
+            // Druhy radek - metadata (napr. Sequence,Volt,Volt,-2.38e-04,1.00e-06)
+            var metadata = lines[1].Split(',');
+
+            // Kontrola, zda metadata maji dostatek hodnot
+            if (metadata.Length < 2)
+                throw new Exception("Metadata v CSV souboru neobsahuji dostatek hodnot.");
+
+            // Najdeme indexy, kde jsou napeti (CHx)
+            int startIndex = 1; // X je vzdy prvni sloupec
+            // Pouziti invariantni kultury pro prevod cisla
+            if (!double.TryParse(metadata[metadata.Length - 2], NumberStyles.Float, CultureInfo.InvariantCulture, out double startTime) ||
+                !double.TryParse(metadata[metadata.Length - 1], NumberStyles.Float, CultureInfo.InvariantCulture, out double increment)) {
+                throw new Exception("Neplatne hodnoty Start nebo Increment v metadatech souboru.");
+            }
+
+            // Debug!!!!!
+            Console.WriteLine($"Startovni cas: {startTime}s");
+            Console.WriteLine($"Casovy prirustek: {increment}s");
+
+            // Vytvorime seznam kanalu
+            Dictionary<int, string> channelIndexes = new(); // Index sloupce -> nazev kanalu
+            for (int i = startIndex; i < headers.Length - 2; i++) {
+                string channelName = headers[i].Trim();
+
+                 // Ignorujeme "Start" a "Increment"
+                if (channelName.Equals("Start", StringComparison.OrdinalIgnoreCase) ||
+                    channelName.Equals("Increment", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!SignalData.ContainsKey(channelName)) {
+                    SignalData[channelName] = new List<Tuple<double, double>>();
+                }
+                channelIndexes[i] = channelName;
+                Console.WriteLine($"Nalezen kanal: {channelName}");
+            }
+
+            Console.WriteLine("Zpracovavani dat...");
+
+            // Zpracujeme signální data (od 3. radku dal)
+            for (int i = 2; i < lines.Length; i++) {
+                var parts = lines[i].Split(',');
+
+                if (parts.Length < metadata.Length - 2) {
+                    Console.WriteLine($"Varovani: Radek {i + 1} ma nedostatek hodnot, preskakuji...");
+                    continue;
                 }
 
-                // Hledani radku s parametry (napr. "Sequence, Volt, Volt, -2.380000e-04, 1.000000e-06")
-                while (!reader.EndOfStream) {
-                    paramLine = reader.ReadLine();
-                    if (paramLine != null && paramLine.StartsWith("Sequence")) {
-                        break;
+                double time = startTime + (i - 2) * increment; // Vypocitame cas podle indexu
+                //Console.Write($"{time}s | ");
+
+                for (int j = startIndex; j < headers.Length - 2; j++) {
+                    if (j < parts.Length && double.TryParse(parts[j], NumberStyles.Float, CultureInfo.InvariantCulture, out double value)) {
+                        string channel = channelIndexes[j];
+                        SignalData[channel].Add(new Tuple<double, double>(time, value));
+                        //Console.Write($" {channel}: {value}V |");
+                    }
+                    else {
+                        //Console.Write($"{headers[j]}: CHYBA |");
                     }
                 }
-
-                // Pokud nebyla nalezena hlavicka nebo parametry, soubor je neplatny
-                if (headerLine == null || paramLine == null)
-                    throw new Exception("Neplatny CSV soubor – nelze najit hlavicku nebo parametry.");
-
-                // Rozdeleni hlavicky na jednotlive sloupce
-                var headers = headerLine.Split(',').Select(x => x.Trim()).ToArray();
-                var paramValues = paramLine.Split(',').Select(x => x.Trim()).ToArray();
-
-                // Nalezeni indexu sloupcu Start a Increment
-                int startIndex = Array.IndexOf(headers, "Start");
-                int incrementIndex = Array.IndexOf(headers, "Increment");
-
-                if (startIndex == -1 || incrementIndex == -1)
-                    throw new Exception("Neplatny format CSV – chybi sloupce Start a Increment.");
-
-                // Parsovani pocatecniho casu mereni
-                if (!double.TryParse(paramValues[startIndex], NumberStyles.Float, CultureInfo.InvariantCulture, out double startTime))
-                    throw new Exception("Chyba pri cteni Start Time.");
-
-                // Parsovani casoveho kroku mezi vzorky (pokud neni platne cislo, pouzije se vychozi hodnota)
-                if (!double.TryParse(paramValues[incrementIndex], NumberStyles.Float, CultureInfo.InvariantCulture, out double timeIncrement))
-                    timeIncrement = 1e-9;
-
-                // Ulozeni hodnot StartTime a TimeIncrement
-                StartTime = startTime;
-                TimeIncrement = timeIncrement;
-
-                // Identifikace vsech dostupnych signalu (napr. CH1, CH2)
-                foreach (var header in headers) {
-                    if (header.StartsWith("CH")) {
-                        SignalData[header] = new List<Tuple<double, double>>();
-                    }
-                }
-
-                int sampleIndex = 0;
-                while (!reader.EndOfStream) {
-                    var line = reader.ReadLine();
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    // Rozdeleni radku na jednotlive hodnoty
-                    var values = line.Split(',').Select(x => x.Trim()).ToArray();
-                    if (values.Length < 2) continue;
-
-                    // Vypocet aktualniho casu vzorku
-                    double time = StartTime + sampleIndex * TimeIncrement;
-
-                    // Zpracovani kazdeho kanalu (CH1, CH2 atd.)
-                    foreach (var header in SignalData.Keys) {
-                        int index = Array.IndexOf(headers, header);
-                        if (index != -1 && double.TryParse(values[index], NumberStyles.Float, CultureInfo.InvariantCulture, out double voltage)) {
-                            SignalData[header].Add(new Tuple<double, double>(time, voltage));
-                        }
-                    }
-
-                    sampleIndex++;
-                }
+                //Console.WriteLine();
             }
         }
     }
