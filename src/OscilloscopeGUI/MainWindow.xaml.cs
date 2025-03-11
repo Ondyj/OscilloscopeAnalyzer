@@ -86,5 +86,26 @@ namespace OscilloscopeGUI {
                 });
             });
         }
+
+        private void DisplayMinMaxValues() {
+        if (loader.SignalData.Count == 0) {
+            MessageBox.Show("Není načten žádný signál.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string result = "Min/Max hodnoty kanálu:\n";
+
+        foreach (var channel in loader.SignalData) {
+            var analyzer = new AnalyzeSignal(channel.Value.Select(v => v.Item2).ToList());
+            var (min, max) = analyzer.GetMinMaxValues();
+            result += $"{channel.Key}: Min = {min} V, Max = {max} V\n";
+        }
+
+        MessageBox.Show(result, "Min/Max hodnoty", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+        private void MinMaxButton_Click(object sender, RoutedEventArgs e) {
+            DisplayMinMaxValues();
+        }
     }
 }

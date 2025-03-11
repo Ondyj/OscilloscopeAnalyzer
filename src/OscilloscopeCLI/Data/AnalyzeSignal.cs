@@ -27,5 +27,15 @@ namespace OscilloscopeCLI.Data
             var uniqueValues = new HashSet<double>(SignalData);
             return uniqueValues.Count <= 2 ? SignalType.Digital : SignalType.Analog;
         }
+
+        /// <summary>
+        /// Vrati minimalni a maximalni hodnotu signalu.
+        /// </summary>
+        public (double Min, double Max) GetMinMaxValues() {
+            double min = SignalData.Min();
+            double max = SignalData.Max();
+            return (min, max);
+        }
     }
+
 }

@@ -22,6 +22,9 @@
                 VerticalAlignment="Top" Width="120" Click="LoadCsv_Click"
                 Grid.Row="0"/>
 
+        <Button Content="Min/Max hodnoty" HorizontalAlignment="Left" Margin="140,5,0,0"
+        VerticalAlignment="Top" Width="120" Click="MinMaxButton_Click"/>
+
         <!-- Informace o osciloskopu -->
         <TextBlock Name="OscilloscopeInfo" Text="Osciloskop: Neznámý" 
                    Margin="10,5,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
