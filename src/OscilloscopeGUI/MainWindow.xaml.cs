@@ -33,7 +33,9 @@ namespace OscilloscopeGUI {
 
                     // Aktualizace GUI
                     DisplayDataInTable();
-                    PlotSignalGraph();
+
+                    // Vykresleni signalu na pozadi
+                    await PlotSignalGraphAsync();
                 }
                 catch (Exception ex) {
                     MessageBox.Show($"Chyba pri nacitani souboru: {ex.Message}", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -55,36 +57,37 @@ namespace OscilloscopeGUI {
         /// <summary>
         /// Vykresli signaly do grafu
         /// </summary>
-        private void PlotSignalGraph() {
-            plot.Plot.Clear();
+        private async Task PlotSignalGraphAsync() {
+            await Task.Run(() => {
+                Dispatcher.Invoke(() => {
+                    plot.Plot.Clear();
 
-            int channelIndex = 0;
-            double verticalOffset = 2.0; // Posun mezi signály pro prehlednost
+                    int channelIndex = 0;
+                    double verticalOffset = 2.0; // Posun mezi signaly
 
-            foreach (var channel in loader.SignalData) {
-                string channelName = channel.Key;
-                double[] times = channel.Value.Select(v => v.Item1).ToArray();
-                double[] voltages = channel.Value.Select(v => v.Item2).ToArray();
+                    foreach (var channel in loader.SignalData) {
+                        string channelName = channel.Key;
+                        double[] times = channel.Value.Select(v => v.Item1).ToArray();
+                        double[] voltages = channel.Value.Select(v => v.Item2).ToArray();
 
-                // Posun signalu na ose Y, aby nebyly prekryte
-                double[] adjustedVoltages = voltages.Select(v => v + channelIndex * verticalOffset).ToArray();
+                        // Posun signalu na ose Y, aby nebyly prekryte
+                        double[] adjustedVoltages = voltages.Select(v => v + channelIndex * verticalOffset).ToArray();
 
-                // Pokud je signal binarni, pouzij Add.SignalXY() (step-like vykresleni)
-                if (voltages.Distinct().Count() <= 3) { 
-                    plot.Plot.Add.SignalXY(times, adjustedVoltages);
-                }
-                else {
-                    plot.Plot.Add.Scatter(times, adjustedVoltages);
-                }
+                        // Pouziti optimalizovaneho vykreslovani
+                        var signal = plot.Plot.Add.Scatter(times, adjustedVoltages);
+                        signal.LegendText = channelName;
 
-                channelIndex++;
-            }
+                        channelIndex++;
+                    }
 
-            // Nastaveni vzhledu grafu
-            plot.Plot.Title("Osciloskopický signál");
-            plot.Plot.Axes.AutoScale();
-            plot.Plot.ShowLegend();
-            plot.Refresh();
+                    // AutoScale jen pokud jeste nebyl nastaven
+                    if (plot.Plot.GetPlottables().Count() == 1)
+                        plot.Plot.Axes.AutoScale();
+
+                    plot.Plot.ShowLegend();
+                    plot.Refresh();
+                });
+            });
         }
     }
 }
