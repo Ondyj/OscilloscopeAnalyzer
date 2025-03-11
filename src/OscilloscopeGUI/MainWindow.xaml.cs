@@ -74,16 +74,13 @@ namespace OscilloscopeGUI {
                         double[] adjustedVoltages = voltages.Select(v => v + channelIndex * verticalOffset).ToArray();
 
                         // Pouziti optimalizovaneho vykreslovani
-                        var signal = plot.Plot.Add.Scatter(times, adjustedVoltages);
+                        var signal = plot.Plot.Add.Signal(adjustedVoltages);
                         signal.LegendText = channelName;
 
                         channelIndex++;
                     }
 
-                    // AutoScale jen pokud jeste nebyl nastaven
-                    if (plot.Plot.GetPlottables().Count() == 1)
-                        plot.Plot.Axes.AutoScale();
-
+                    plot.Plot.Axes.AutoScale();
                     plot.Plot.ShowLegend();
                     plot.Refresh();
                 });
