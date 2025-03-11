@@ -36,6 +36,23 @@ namespace OscilloscopeCLI.Data
             double max = SignalData.Max();
             return (min, max);
         }
-    }
 
+        /// <summary>
+        /// Detekuje hrany v signalu na zaklade prahove hodnoty.
+        /// </summary>
+        /// <param name="threshold">Pravova hodnota pro detekci hrany.</param>
+        /// <returns>Seznam indexu, kde doslo k hrane.</returns>
+        public List<int> DetectEdges(double threshold) {
+            List<int> edgeIndexes = new List<int>();
+
+            for (int i = 1; i < SignalData.Count; i++) {
+                if (Math.Abs(SignalData[i] - SignalData[i - 1]) >= threshold) {
+                    edgeIndexes.Add(i);
+                }
+            }
+
+            return edgeIndexes;
+        }
+
+    }
 }

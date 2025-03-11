@@ -88,21 +88,44 @@ namespace OscilloscopeGUI {
         }
 
         private void DisplayMinMaxValues() {
-        if (loader.SignalData.Count == 0) {
-            MessageBox.Show("Není načten žádný signál.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
+            if (loader.SignalData.Count == 0) {
+                MessageBox.Show("Není načten žádný signál.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string result = "Min/Max hodnoty kanálu:\n";
+
+            foreach (var channel in loader.SignalData) {
+                var analyzer = new AnalyzeSignal(channel.Value.Select(v => v.Item2).ToList());
+                var (min, max) = analyzer.GetMinMaxValues();
+                result += $"{channel.Key}: Min = {min} V, Max = {max} V\n";
+            }
+
+            MessageBox.Show(result, "Min/Max hodnoty", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        string result = "Min/Max hodnoty kanálu:\n";
+        private void DisplayEdges() {
+            if (loader.SignalData.Count == 0) {
+                MessageBox.Show("Není načten žádný signál.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
-        foreach (var channel in loader.SignalData) {
-            var analyzer = new AnalyzeSignal(channel.Value.Select(v => v.Item2).ToList());
-            var (min, max) = analyzer.GetMinMaxValues();
-            result += $"{channel.Key}: Min = {min} V, Max = {max} V\n";
+            double threshold = 0.5; // Nastavena prahova hodnota pro detekci hran
+            string result = "Detekované hrany:\n";
+
+            foreach (var channel in loader.SignalData) {
+                var analyzer = new AnalyzeSignal(channel.Value.Select(v => v.Item2).ToList());
+                var edges = analyzer.DetectEdges(threshold);
+
+                result += $"{channel.Key}: {edges.Count} hran nalezeno\n";
+            }
+
+            MessageBox.Show(result, "Detekovane hrany", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        MessageBox.Show(result, "Min/Max hodnoty", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
+        private void EdgeDetectionButton_Click(object sender, RoutedEventArgs e) {
+            DisplayEdges();
+        }
 
         private void MinMaxButton_Click(object sender, RoutedEventArgs e) {
             DisplayMinMaxValues();
