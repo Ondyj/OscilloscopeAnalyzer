@@ -63,10 +63,10 @@ namespace OscilloscopeGUI {
                     plot.Plot.Clear();
 
                     double offset = 0; // Pocatecni posun na ose Y
-                    double spacing = 0.001; // Velikost mezery mezi kanaly
+                    double spacing = 0.2; // Velikost mezery mezi kanaly
 
                     // Pro kazdy kanal zjistime jeho rozsah
-                    foreach (var channel in loader.SignalData) {
+                    foreach (var channel in loader.SignalData) { // Vykreslime prvni kanal nahore, dalsi budou pod nim
                         string channelName = channel.Key;
                         double[] times = channel.Value.Select(v => v.Item1).ToArray();
                         double[] voltages = channel.Value.Select(v => v.Item2).ToArray();
@@ -75,7 +75,7 @@ namespace OscilloscopeGUI {
                         double minValue = voltages.Min();
                         double maxValue = voltages.Max();
 
-                        // Posun signalu nahoru, aby se neprekryval s predchozim
+                        // Posun signalu dolu, aby se kanaly neprekryvaly
                         double[] adjustedVoltages = voltages.Select(v => v + offset - minValue).ToArray();
 
                         // Vykresleni signalu
@@ -92,8 +92,8 @@ namespace OscilloscopeGUI {
                         var upperLine = plot.Plot.Add.HorizontalLine(upperBound);
                         upperLine.Color = new ScottPlot.Color(128, 128, 128, 128);
 
-                        // Posuneme osu Y pro dalsi kanal (max hodnota + mezera)
-                        offset += (maxValue - minValue) + 2 * spacing;
+                        // Posuneme osu Y dolu pro dalsi kanal (max hodnota + mezera)
+                        offset -= (maxValue - minValue) + 2 * spacing;
                     }
 
                     plot.Plot.Axes.AutoScale();
