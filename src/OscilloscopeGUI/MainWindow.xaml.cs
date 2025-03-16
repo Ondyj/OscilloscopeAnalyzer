@@ -32,7 +32,7 @@ namespace OscilloscopeGUI {
                     }
 
                     // Aktualizace GUI
-                    DisplayDataInTable();
+                    //DisplayDataInTable();
 
                     // Vykresleni signalu na pozadi
                     await PlotSignalGraphAsync();
@@ -46,38 +46,54 @@ namespace OscilloscopeGUI {
         /// <summary>
         /// Zobrazi nactena data v tabulce (DataGrid)
         /// </summary>
-        private void DisplayDataInTable() {
+        /*private void DisplayDataInTable() {
             var tableData = loader.SignalData
                 .SelectMany(kv => kv.Value.Select(v => new { Cas = v.Item1, Kanal = kv.Key, Napeti = v.Item2 }))
                 .ToList();
 
             dataGrid.ItemsSource = tableData;
-        }
+        }*/
 
         /// <summary>
-        /// Vykresli signaly do grafu
+        /// Vykresli signaly do grafu s adaptivnim vertikalnim posunutim
         /// </summary>
         private async Task PlotSignalGraphAsync() {
             await Task.Run(() => {
                 Dispatcher.Invoke(() => {
                     plot.Plot.Clear();
 
-                    int channelIndex = 0;
-                    double verticalOffset = 2.0; // Posun mezi signaly
+                    double offset = 0; // Pocatecni posun na ose Y
+                    double spacing = 0.001; // Velikost mezery mezi kanaly
 
+                    // Pro kazdy kanal zjistime jeho rozsah
                     foreach (var channel in loader.SignalData) {
                         string channelName = channel.Key;
                         double[] times = channel.Value.Select(v => v.Item1).ToArray();
                         double[] voltages = channel.Value.Select(v => v.Item2).ToArray();
 
-                        // Posun signalu na ose Y, aby nebyly prekryte
-                        double[] adjustedVoltages = voltages.Select(v => v + channelIndex * verticalOffset).ToArray();
+                        // Zjisteni minima a maxima aktualniho kanalu
+                        double minValue = voltages.Min();
+                        double maxValue = voltages.Max();
 
-                        // Pouziti optimalizovaneho vykreslovani
+                        // Posun signalu nahoru, aby se neprekryval s predchozim
+                        double[] adjustedVoltages = voltages.Select(v => v + offset - minValue).ToArray();
+
+                        // Vykresleni signalu
                         var signal = plot.Plot.Add.Signal(adjustedVoltages);
                         signal.LegendText = channelName;
 
-                        channelIndex++;
+                        // Pridani horni a dolni ohranicujici cary
+                        double lowerBound = offset - spacing;  // Dolni hranice kanalu
+                        double upperBound = offset + (maxValue - minValue) + spacing;  // Horni hranice kanalu
+                        
+                        var lowerLine = plot.Plot.Add.HorizontalLine(lowerBound);
+                        lowerLine.Color = new ScottPlot.Color(128, 128, 128, 128); // Sediva barva
+
+                        var upperLine = plot.Plot.Add.HorizontalLine(upperBound);
+                        upperLine.Color = new ScottPlot.Color(128, 128, 128, 128);
+
+                        // Posuneme osu Y pro dalsi kanal (max hodnota + mezera)
+                        offset += (maxValue - minValue) + 2 * spacing;
                     }
 
                     plot.Plot.Axes.AutoScale();

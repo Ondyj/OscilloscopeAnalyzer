@@ -7,40 +7,24 @@
         xmlns:ScottPlot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
         mc:Ignorable="d"
         Title="Oscilloscope Analyzer" Height="700" Width="1000">
-
+    
     <Grid>
-        <!-- Definice radku pro spravne rozmisteni prvku -->
+        <!-- Definice radku pro tlacitka a zbytek okna pro graf -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Tlacitka -->
-            <RowDefinition Height="Auto"/>  <!-- Informace o osciloskopu -->
-            <RowDefinition Height="2*"/>   <!-- Graf -->
-            <RowDefinition Height="1*"/>   <!-- DataGrid -->
+            <RowDefinition Height="*"/>    <!-- Graf zabira cely zbytek okna -->
         </Grid.RowDefinitions>
 
-        <!-- Tlacitko pro nacteni CSV -->
-        <Button Content="Načíst CSV" HorizontalAlignment="Left" Margin="10,5,0,0"
-                VerticalAlignment="Top" Width="120" Click="LoadCsv_Click"
-                Grid.Row="0"/>
+        <!-- Tlacitka nahore -->
+        <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="10">
+            <Button Content="Načíst CSV" Width="120" Click="LoadCsv_Click" Margin="5"/>
+            <Button Content="Min/Max hodnoty" Width="120" Click="MinMaxButton_Click" Margin="5"/>
+            <Button Content="Detekce hran" Width="120" Click="EdgeDetectionButton_Click" Margin="5"/>
+        </StackPanel>
 
-        <Button Content="Min/Max hodnoty" HorizontalAlignment="Left" Margin="140,5,0,0"
-        VerticalAlignment="Top" Width="120" Click="MinMaxButton_Click"/>
-
-        <Button Content="Detekce hran" HorizontalAlignment="Left" Margin="270,5,0,0"
-        VerticalAlignment="Top" Width="120" Click="EdgeDetectionButton_Click"/>
-
-        <!-- Informace o osciloskopu
-        <TextBlock Name="OscilloscopeInfo" Text="Osciloskop: Neznámý" 
-                   Margin="10,5,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
-                   FontWeight="Bold" FontSize="14" Grid.Row="1"/> -->
-
-        <!-- Graf (ScottPlot) -->
-        <ScottPlot:WpfPlot Name="plot" Grid.Row="2" Height="350" Margin="10"
+        <!-- Graf (ScottPlot) zabira cele zbyvajici misto -->
+        <ScottPlot:WpfPlot Name="plot" Grid.Row="1" Margin="10"
                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
-
-        <!-- DataGrid pro tabulkove zobrazeni dat -->
-        <DataGrid x:Name="dataGrid" Grid.Row="3" AutoGenerateColumns="True"
-                  Margin="10" Height="200"
-                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
     </Grid>
 
 </Window>

@@ -75,7 +75,7 @@ namespace OscilloscopeCLI.Data {
         }
 
         /// <summary>
-        /// Nacte data z logickeho analyzatoru (např. DSLogic, Saleae).
+        /// Nacte data z logickeho analyzatoru
         /// </summary>
         private void LoadLogicAnalyzerData(string[] lines) {
             Console.WriteLine("Detekován formát logického analyzátoru.");
