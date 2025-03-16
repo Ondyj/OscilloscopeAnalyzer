@@ -28,10 +28,10 @@
         <Button Content="Detekce hran" HorizontalAlignment="Left" Margin="270,5,0,0"
         VerticalAlignment="Top" Width="120" Click="EdgeDetectionButton_Click"/>
 
-        <!-- Informace o osciloskopu -->
+        <!-- Informace o osciloskopu
         <TextBlock Name="OscilloscopeInfo" Text="Osciloskop: Neznámý" 
                    Margin="10,5,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
-                   FontWeight="Bold" FontSize="14" Grid.Row="1"/>
+                   FontWeight="Bold" FontSize="14" Grid.Row="1"/> -->
 
         <!-- Graf (ScottPlot) -->
         <ScottPlot:WpfPlot Name="plot" Grid.Row="2" Height="350" Margin="10"

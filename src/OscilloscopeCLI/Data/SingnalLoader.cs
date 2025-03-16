@@ -10,89 +10,96 @@ namespace OscilloscopeCLI.Data {
         public Dictionary<string, List<Tuple<double, double>>> SignalData { get; private set; } = new();
 
         /// <summary>
-        /// Nacte signalni data z CSV souboru v osciloskopovem formatu.
+        /// Nacte signalni data z CSV souboru v ruznych formatech (osciloskop, logicky analyzator, obecny CSV).
         /// </summary>
         /// <param name="filePath">Cesta k souboru.</param>
         public void LoadCsvFile(string filePath) {
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"Soubor {filePath} nebyl nalezen.");
 
-            SignalData.Clear(); // Vycistime predchozi data
-
+            SignalData.Clear();
             var lines = File.ReadAllLines(filePath);
+            if (lines.Length < 3) throw new Exception("Soubor nema dostatek radku pro nacteni dat.");
 
-            if (lines.Length < 3)
-                throw new Exception("Soubor nema dostatek radku pro nacteni dat.");
+            // Detekce formatu na zaklade prvniho radku
+            string[] firstRow = lines[0].Split(',');
+            bool isOscilloscopeFormat = firstRow.Contains("X") && firstRow.Any(col => col.StartsWith("CH")) &&
+                                        firstRow.Contains("Start") && firstRow.Contains("Increment");
 
-            // Debug!!!!!
-            Console.WriteLine($"Nacitani souboru: {filePath}");
-            Console.WriteLine($"Hlavicka: {lines[0]}");
-            Console.WriteLine($"Metadata: {lines[1]}");
+            if (isOscilloscopeFormat) {
+                LoadOscilloscopeData(lines);
+            } else {
+                LoadLogicAnalyzerData(lines);
+            }
+        }
 
-            // Prvni radek - hlavicka (napr. X,CH1,CH2,Start,Increment)
+        /// <summary>
+        /// Nacte osciloskopova data, ktera obsahuji X, CH kanaly, Start a Increment.
+        /// </summary>
+        private void LoadOscilloscopeData(string[] lines) {
+            Console.WriteLine("Detekován osciloskopový formát.");
+
             var headers = lines[0].Split(',');
-
-            // Druhy radek - metadata (napr. Sequence,Volt,Volt,-2.38e-04,1.00e-06)
             var metadata = lines[1].Split(',');
 
-            // Kontrola, zda metadata maji dostatek hodnot
-            if (metadata.Length < 2)
-                throw new Exception("Metadata v CSV souboru neobsahuji dostatek hodnot.");
-
-            // Najdeme indexy, kde jsou napeti (CHx)
-            int startIndex = 1; // X je vzdy prvni sloupec
-            // Pouziti invariantni kultury pro prevod cisla
             if (!double.TryParse(metadata[metadata.Length - 2], NumberStyles.Float, CultureInfo.InvariantCulture, out double startTime) ||
                 !double.TryParse(metadata[metadata.Length - 1], NumberStyles.Float, CultureInfo.InvariantCulture, out double increment)) {
-                throw new Exception("Neplatne hodnoty Start nebo Increment v metadatech souboru.");
+                throw new Exception("Neplatné hodnoty Start nebo Increment v metadatech.");
             }
 
-            // Debug!!!!!
-            Console.WriteLine($"Startovni cas: {startTime}s");
-            Console.WriteLine($"Casovy prirustek: {increment}s");
-
-            // Vytvorime seznam kanalu
-            Dictionary<int, string> channelIndexes = new(); // Index sloupce -> nazev kanalu
-            for (int i = startIndex; i < headers.Length - 2; i++) {
+            Dictionary<int, string> channelIndexes = new();
+            for (int i = 1; i < headers.Length - 2; i++) {
                 string channelName = headers[i].Trim();
-
-                 // Ignorujeme "Start" a "Increment"
-                if (channelName.Equals("Start", StringComparison.OrdinalIgnoreCase) ||
-                    channelName.Equals("Increment", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
                 if (!SignalData.ContainsKey(channelName)) {
                     SignalData[channelName] = new List<Tuple<double, double>>();
                 }
                 channelIndexes[i] = channelName;
-                Console.WriteLine($"Nalezen kanal: {channelName}");
             }
 
-            Console.WriteLine("Zpracovavani dat...");
-
-            // Zpracujeme signální data (od 3. radku dal)
             for (int i = 2; i < lines.Length; i++) {
                 var parts = lines[i].Split(',');
 
-                if (parts.Length < metadata.Length - 2) {
-                    Console.WriteLine($"Varovani: Radek {i + 1} ma nedostatek hodnot, preskakuji...");
-                    continue;
-                }
+                if (parts.Length < headers.Length - 2) continue;
 
-                double time = startTime + (i - 2) * increment; // Vypocitame cas podle indexu
-                //Console.Write($"{time}s | ");
-
-                for (int j = startIndex; j < headers.Length - 2; j++) {
-                    if (j < parts.Length && double.TryParse(parts[j], NumberStyles.Float, CultureInfo.InvariantCulture, out double value)) {
+                double time = startTime + (i - 2) * increment;
+                for (int j = 1; j < headers.Length - 2; j++) {
+                    if (double.TryParse(parts[j], NumberStyles.Float, CultureInfo.InvariantCulture, out double value)) {
                         string channel = channelIndexes[j];
                         SignalData[channel].Add(new Tuple<double, double>(time, value));
-                        //Console.Write($" {channel}: {value}V |");
-                    }
-                    else {
-                        //Console.Write($"{headers[j]}: CHYBA |");
                     }
                 }
-                //Console.WriteLine();
+            }
+        }
+
+        /// <summary>
+        /// Nacte data z logickeho analyzatoru (např. DSLogic, Saleae).
+        /// </summary>
+        private void LoadLogicAnalyzerData(string[] lines) {
+            Console.WriteLine("Detekován formát logického analyzátoru.");
+
+            int headerIndex = Array.FindIndex(lines, line => line.StartsWith("Time("));
+            if (headerIndex == -1 || headerIndex + 1 >= lines.Length)
+                throw new Exception("Soubor neobsahuje platnou hlavicku s casovymi udaji.");
+
+            var headers = lines[headerIndex].Split(',');
+            for (int i = 1; i < headers.Length; i++) {
+                string channelName = $"CH{headers[i].Trim()}";
+                SignalData[channelName] = new List<Tuple<double, double>>();
+            }
+
+            for (int i = headerIndex + 1; i < lines.Length; i++) {
+                var parts = lines[i].Split(',');
+                if (parts.Length != headers.Length) continue;
+
+                if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double time))
+                    continue;
+
+                for (int j = 1; j < parts.Length; j++) {
+                    if (int.TryParse(parts[j], out int value)) {
+                        string channel = $"CH{headers[j].Trim()}";
+                        SignalData[channel].Add(new Tuple<double, double>(time, value));
+                    }
+                }
             }
         }
     }
