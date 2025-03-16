@@ -31,6 +31,9 @@ namespace OscilloscopeCLI.Data {
             } else {
                 LoadLogicAnalyzerData(lines);
             }
+
+            // Odstraneni prazdnych kanalu
+            RemoveEmptyChannels();
         }
 
         /// <summary>
@@ -100,6 +103,21 @@ namespace OscilloscopeCLI.Data {
                         SignalData[channel].Add(new Tuple<double, double>(time, value));
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Odstrani kanaly, ktere obsahuji pouze nuly.
+        /// </summary>
+        private void RemoveEmptyChannels() {
+            var emptyChannels = SignalData
+                .Where(kv => kv.Value.All(v => v.Item2 == 0)) // Zkontroluje, zda jsou vsechny hodnoty 0
+                .Select(kv => kv.Key)
+                .ToList();
+
+            foreach (var channel in emptyChannels) {
+                Console.WriteLine($"Odstraněn prázdný kanál: {channel}");
+                SignalData.Remove(channel);
             }
         }
     }
