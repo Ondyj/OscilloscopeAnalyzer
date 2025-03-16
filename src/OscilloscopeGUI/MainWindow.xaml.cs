@@ -9,8 +9,10 @@ using OscilloscopeCLI.Data;
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
         private SignalLoader loader = new SignalLoader(); // Ulozeni dat do tridy
+
         public MainWindow() {
             InitializeComponent();
+            this.KeyDown += MainWindow_KeyDown; // Pripojeni obsluhy klavesnice
         }
 
         /// <summary>
@@ -137,6 +139,39 @@ namespace OscilloscopeGUI {
             }
 
             MessageBox.Show(result, "Detekované pulzy", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        /// <summary>
+        /// Obsluha klavesovych vstupu pro ovladani zoomu
+        /// </summary>
+        private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e) {
+            var xAxis = plot.Plot.Axes.Bottom; // Spodni osa X
+            var yAxis = plot.Plot.Axes.Left;   // Leva osa Y
+
+            double zoomFactor = 0.1; // Mira zmeny pri zoomovani
+            double rangeX = xAxis.Max - xAxis.Min;
+            double shiftX = rangeX * zoomFactor;
+
+            // Ulozime aktualni rozsah osy Y, aby se nemenil
+            double minY = yAxis.Min;
+            double maxY = yAxis.Max;
+
+            // roztazeni osy pomoci W
+            if (e.Key == System.Windows.Input.Key.W) { 
+                xAxis.Min += shiftX;
+                xAxis.Max -= shiftX;
+            }
+            // opacny zoom S
+            else if (e.Key == System.Windows.Input.Key.S) {
+                xAxis.Min -= shiftX;
+                xAxis.Max += shiftX;
+            }
+
+            // Vratime osu Y zpet na puvodni rozsah
+            yAxis.Min = minY;
+            yAxis.Max = maxY;
+
+            plot.Refresh(); // Aktualizace grafu
         }
 
     }
