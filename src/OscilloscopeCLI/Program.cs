@@ -55,9 +55,9 @@ class Program
                 Console.WriteLine($"Analyzujeme kanál: {channelName}");
 
                 // ANALÝZA SIGNÁLU
-                AnalyzeSignal analyzer = new AnalyzeSignal(signalValues);
-                var signalType = analyzer.DetectSignalType();
-                Console.WriteLine($"Detekovaný typ signálu: {signalType}");
+                //AnalyzeSignal analyzer = new AnalyzeSignal(signalValues);
+                //var signalType = analyzer.DetectSignalType();
+                //Console.WriteLine($"Detekovaný typ signálu: {signalType}");
             }
             else
             {

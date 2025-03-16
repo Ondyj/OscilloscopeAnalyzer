@@ -31,9 +31,6 @@ namespace OscilloscopeGUI {
                         return;
                     }
 
-                    // Aktualizace GUI
-                    //DisplayDataInTable();
-
                     // Vykresleni signalu na pozadi
                     await PlotSignalGraphAsync();
                 }
@@ -44,18 +41,7 @@ namespace OscilloscopeGUI {
         }
 
         /// <summary>
-        /// Zobrazi nactena data v tabulce (DataGrid)
-        /// </summary>
-        /*private void DisplayDataInTable() {
-            var tableData = loader.SignalData
-                .SelectMany(kv => kv.Value.Select(v => new { Cas = v.Item1, Kanal = kv.Key, Napeti = v.Item2 }))
-                .ToList();
-
-            dataGrid.ItemsSource = tableData;
-        }*/
-
-        /// <summary>
-        /// Vykresli signaly do grafu s adaptivnim vertikalnim posunutim
+        /// Vykresli signaly do grafu s vertikalnim posunutim
         /// </summary>
         private async Task PlotSignalGraphAsync() {
             await Task.Run(() => {
@@ -103,6 +89,9 @@ namespace OscilloscopeGUI {
             });
         }
 
+        /// <summary>
+        /// Zobrazi minimalni a maximalni hodnotu signalu pro kazdy kanal
+        /// </summary>
         private void DisplayMinMaxValues() {
             if (loader.SignalData.Count == 0) {
                 MessageBox.Show("Není načten žádný signál.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -112,7 +101,7 @@ namespace OscilloscopeGUI {
             string result = "Min/Max hodnoty kanálu:\n";
 
             foreach (var channel in loader.SignalData) {
-                var analyzer = new AnalyzeSignal(channel.Value.Select(v => v.Item2).ToList());
+                var analyzer = new AnalyzeSignal(channel.Value);
                 var (min, max) = analyzer.GetMinMaxValues();
                 result += $"{channel.Key}: Min = {min} V, Max = {max} V\n";
             }
@@ -120,31 +109,35 @@ namespace OscilloscopeGUI {
             MessageBox.Show(result, "Min/Max hodnoty", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        private void DisplayEdges() {
+        /// <summary>
+        /// Handler pro kliknuti na tlacitko "Min/Max hodnoty"
+        /// </summary>
+        private void MinMaxButton_Click(object sender, RoutedEventArgs e) {
+            DisplayMinMaxValues();
+        }
+
+        /// <summary>
+        /// Handler pro kliknuti na tlacitko "Detekce pulzu"
+        /// </summary>
+        private void PulseDetectionButton_Click(object sender, RoutedEventArgs e) {
             if (loader.SignalData.Count == 0) {
                 MessageBox.Show("Není načten žádný signál.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            double threshold = 0.5; // Nastavena prahova hodnota pro detekci hran
-            string result = "Detekované hrany:\n";
+            double threshold = 0.5; // Mezni hodnota pro detekci pulzu
+            string result = "Detekované pulzy:\n";
 
             foreach (var channel in loader.SignalData) {
-                var analyzer = new AnalyzeSignal(channel.Value.Select(v => v.Item2).ToList());
-                var edges = analyzer.DetectEdges(threshold);
+                var analyzer = new AnalyzeSignal(channel.Value);
+                var pulses = analyzer.DetectPulses(threshold);
+                double avgWidth = analyzer.CalculateAveragePulseWidth(pulses);
 
-                result += $"{channel.Key}: {edges.Count} hran nalezeno\n";
+                result += $"{channel.Key}: {pulses.Count} pulzů, průměrná šířka {avgWidth:F6} s\n";
             }
 
-            MessageBox.Show(result, "Detekovane hrany", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(result, "Detekované pulzy", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        private void EdgeDetectionButton_Click(object sender, RoutedEventArgs e) {
-            DisplayEdges();
-        }
-
-        private void MinMaxButton_Click(object sender, RoutedEventArgs e) {
-            DisplayMinMaxValues();
-        }
     }
 }

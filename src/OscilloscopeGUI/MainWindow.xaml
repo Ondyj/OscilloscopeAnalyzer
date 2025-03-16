@@ -19,7 +19,7 @@
         <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="10">
             <Button Content="Načíst CSV" Width="120" Click="LoadCsv_Click" Margin="5"/>
             <Button Content="Min/Max hodnoty" Width="120" Click="MinMaxButton_Click" Margin="5"/>
-            <Button Content="Detekce hran" Width="120" Click="EdgeDetectionButton_Click" Margin="5"/>
+             <Button Content="Detekce pulzů" Width="120" Click="PulseDetectionButton_Click" Margin="5"/>
         </StackPanel>
 
         <!-- Graf (ScottPlot) zabira cele zbyvajici misto -->
