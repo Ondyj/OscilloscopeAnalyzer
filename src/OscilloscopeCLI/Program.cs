@@ -1,5 +1,5 @@
 ﻿using System;
-using OscilloscopeCLI.Data;
+using OscilloscopeCLI.Signal;
 using System.Collections.Generic;
 using System.Linq;
 

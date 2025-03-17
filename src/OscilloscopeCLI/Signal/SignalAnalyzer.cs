@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OscilloscopeCLI.Data {
+namespace OscilloscopeCLI.Signal {
     public enum SignalType { Analog, Digital }
 
     public class SignalAnalyzer {

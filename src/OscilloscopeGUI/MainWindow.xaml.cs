@@ -4,7 +4,7 @@ using System.Linq;
 using System.Windows;
 using Microsoft.Win32;
 using ScottPlot;
-using OscilloscopeCLI.Data;
+using OscilloscopeCLI.Signal;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {

@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Globalization;
 
-namespace OscilloscopeCLI.Data {
+namespace OscilloscopeCLI.Signal {
     public class SignalLoader {
         // Slovnik pro ukladani signalu, klice jsou nazvy kanalu
         public Dictionary<string, List<Tuple<double, double>>> SignalData { get; private set; } = new();

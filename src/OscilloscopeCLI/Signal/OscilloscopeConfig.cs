@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Globalization;
 
-namespace OscilloscopeCLI.Data {
+namespace OscilloscopeCLI.Signal {
     public class OscilloscopeConfig {
         public string Model { get; private set; } = "";
         public double SamplingRate { get; private set; } = 0;
