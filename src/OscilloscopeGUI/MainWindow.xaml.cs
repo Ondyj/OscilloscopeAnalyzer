@@ -103,7 +103,7 @@ namespace OscilloscopeGUI {
             string result = "Min/Max hodnoty kanálu:\n";
 
             foreach (var channel in loader.SignalData) {
-                var analyzer = new AnalyzeSignal(channel.Value);
+                var analyzer = new SignalAnalyzer(channel.Value);
                 var (min, max) = analyzer.GetMinMaxValues();
                 result += $"{channel.Key}: Min = {min} V, Max = {max} V\n";
             }
@@ -131,7 +131,7 @@ namespace OscilloscopeGUI {
             string result = "Detekované pulzy:\n";
 
             foreach (var channel in loader.SignalData) {
-                var analyzer = new AnalyzeSignal(channel.Value);
+                var analyzer = new SignalAnalyzer(channel.Value);
                 var pulses = analyzer.DetectPulses(threshold);
                 double avgWidth = analyzer.CalculateAveragePulseWidth(pulses);
 
