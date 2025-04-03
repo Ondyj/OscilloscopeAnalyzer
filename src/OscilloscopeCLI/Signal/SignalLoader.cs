@@ -40,14 +40,14 @@ namespace OscilloscopeCLI.Signal {
         /// Nacte osciloskopova data, ktera obsahuji X, CH kanaly, Start a Increment.
         /// </summary>
         private void LoadOscilloscopeData(string[] lines) {
-            Console.WriteLine("Detekován osciloskopový formát.");
+            Console.WriteLine("Detekovan osciloskopovy format.");
 
             var headers = lines[0].Split(',');
             var metadata = lines[1].Split(',');
 
             if (!double.TryParse(metadata[metadata.Length - 2], NumberStyles.Float, CultureInfo.InvariantCulture, out double startTime) ||
                 !double.TryParse(metadata[metadata.Length - 1], NumberStyles.Float, CultureInfo.InvariantCulture, out double increment)) {
-                throw new Exception("Neplatné hodnoty Start nebo Increment v metadatech.");
+                throw new Exception("Neplatne hodnoty Start nebo Increment v metadatech.");
             }
 
             Dictionary<int, string> channelIndexes = new();
@@ -78,7 +78,7 @@ namespace OscilloscopeCLI.Signal {
         /// Nacte data z logickeho analyzatoru
         /// </summary>
         private void LoadLogicAnalyzerData(string[] lines) {
-            Console.WriteLine("Detekován formát logického analyzátoru.");
+            Console.WriteLine("Detekovan format logickeho analyzatoru.");
 
             int headerIndex = Array.FindIndex(lines, line => line.StartsWith("Time("));
             if (headerIndex == -1 || headerIndex + 1 >= lines.Length)
@@ -116,7 +116,7 @@ namespace OscilloscopeCLI.Signal {
                 .ToList();
 
             foreach (var channel in emptyChannels) {
-                Console.WriteLine($"Odstraněn prázdný kanál: {channel}");
+                //Console.WriteLine($"Odstranen prazdny kanal: {channel}");
                 SignalData.Remove(channel);
             }
         }

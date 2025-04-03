@@ -47,6 +47,9 @@ class Program {
             Console.WriteLine($"Vysledky byly ulozeny do: {exportPath}");
 
             analyzer.PrintTimingSummary();
+
+            bool isUART = ProtocolDetector.DetectUARTProtocol(analyzer.GetSamples(), baudRate);
+            Console.WriteLine(isUART ? "Detekovan UART protokol." : "UART pravdepodobne nebyl detekovan.");
         }
         catch (Exception ex) {
             Console.WriteLine($"CHYBA: {ex.Message}");

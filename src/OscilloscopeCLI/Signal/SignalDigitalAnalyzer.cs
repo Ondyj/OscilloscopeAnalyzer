@@ -95,10 +95,10 @@ namespace OscilloscopeCLI.Signal {
         /// <returns>Min, max, prumerna mezera mezi hranami a odhadovana baud rate.</returns>
         public (double MinInterval, double MaxInterval, double AvgInterval, double EstimatedBaudRate) AnalyzeTiming() {
             var edges = DetectEdges();
-            Console.WriteLine($"[DEBUG] Pocet detekovanych hran: {edges.Count}");
+            //Console.WriteLine($"[DEBUG] Pocet detekovanych hran: {edges.Count}");
 
             if (edges.Count < 2) {
-                Console.WriteLine("[DEBUG] Nedostatek hran pro vypocet casovani.");
+                //Console.WriteLine("[DEBUG] Nedostatek hran pro vypocet casovani.");
                 return (0, 0, 0, 0);
             }
 

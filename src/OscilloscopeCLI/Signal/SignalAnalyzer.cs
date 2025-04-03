@@ -10,7 +10,7 @@ namespace OscilloscopeCLI.Signal {
 
         public SignalAnalyzer(List<Tuple<double, double>> signalData) {
             if (signalData == null || signalData.Count == 0)
-                throw new ArgumentException("SignalData nemůže být prázdný.");
+                throw new ArgumentException("SignalData nemuze byt prazdny.");
 
             SignalData = signalData;
         }
