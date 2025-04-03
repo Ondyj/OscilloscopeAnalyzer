@@ -106,7 +106,7 @@ namespace OscilloscopeCLI.Signal {
             for (int i = 1; i < edges.Count; i++) {
                 double interval = edges[i] - edges[i - 1];
                 intervals.Add(interval);
-                Console.WriteLine($"[DEBUG] Interval {i}: {interval} s");
+                //Console.WriteLine($"[DEBUG] Interval {i}: {interval} s");
             }
 
             double min = intervals.Min();
@@ -114,10 +114,10 @@ namespace OscilloscopeCLI.Signal {
             double avg = intervals.Average();
             double baudRate = avg > 0 ? 1.0 / avg : 0;
 
-            Console.WriteLine($"[DEBUG] Min interval: {min} s");
-            Console.WriteLine($"[DEBUG] Max interval: {max} s");
-            Console.WriteLine($"[DEBUG] Avg interval: {avg} s");
-            Console.WriteLine($"[DEBUG] Odhad baud rate: {baudRate} baud");
+            //Console.WriteLine($"[DEBUG] Min interval: {min} s");
+            //Console.WriteLine($"[DEBUG] Max interval: {max} s");
+            //Console.WriteLine($"[DEBUG] Avg interval: {avg} s");
+            //Console.WriteLine($"[DEBUG] Odhad baud rate: {baudRate} baud");
 
             return (min, max, avg, baudRate);
         }
@@ -132,6 +132,13 @@ namespace OscilloscopeCLI.Signal {
             Console.WriteLine($" - Max interval mezi hranami: {max * 1_000_000:F3} µs");
             Console.WriteLine($" - Prumerna mezera: {avg * 1_000_000:F3} µs");
             Console.WriteLine($" - Odhadovana baud rate: {baud:F0} baud"); // pocet bitu za 1s
+        }
+
+        /// <summary>
+        /// Vraci seznam vzorku (cas + logicka hodnota) pro dalsi zpracovani.
+        /// </summary>
+        public List<SignalSample> GetSamples() {
+            return _samples;
         }
     }
 }
