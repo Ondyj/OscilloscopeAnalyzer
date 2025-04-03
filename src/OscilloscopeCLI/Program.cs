@@ -1,15 +1,14 @@
 ﻿using System;
-using OscilloscopeCLI.Signal;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using OscilloscopeCLI.Signal;
 using OscilloscopeCLI.Protocols;
 
 class Program {
-    // POUZE TESTOVACI TRIDA NA ODLADENI FUKNCI!!
+    // POUZE TESTOVACI TRIDA NA ODLADENI FUNKCI
     static void Main() {
-        string filePathCSV = "testData/DSLogic U2Pro16-la-250307-130617_spi.csv"; // nacitany soubor rs115200_scr
-        // string filePathCSV = "testData/DSLogic U2Pro16-la-250307-130617_spi.csv";
-        string exportPath = "uart_output.csv";
+        string filePathCSV = "testData/DSLogic U2Pro16-la-250307-130617_spi.csv";
 
         try {
             // Nacteni signalu
@@ -21,35 +20,47 @@ class Program {
                 return;
             }
 
-            // Vyber prvni kanal
-            var firstChannel = loader.SignalData.First();
-            string channelName = firstChannel.Key;
-            Console.WriteLine($"Analyzujeme kanal: {channelName}");
+            Console.WriteLine($"Celkem kanalu: {loader.SignalData.Count}");
 
-            // Inicializace analyzatoru
-            DigitalSignalAnalyzer analyzer = new DigitalSignalAnalyzer(loader.SignalData, channelName);
+            // Projdi vsechny kanaly
+            foreach (var channel in loader.SignalData) {
+                string channelName = channel.Key;
+                Console.WriteLine($"\n--- Analyza kanalu {channelName} ---");
 
-            // Vypocet baud rate
-            var (_, _, avgInterval, baudRate) = analyzer.AnalyzeTiming();
-            if (baudRate <= 0) {
-                Console.WriteLine("Nepodarilo se spocitat baud rate.");
-                return;
+                // Detekce typu signalu
+                var typeDetector = new SignalAnalyzer(channel.Value);
+                var signalType = typeDetector.DetectSignalType();
+
+                if (signalType == SignalType.Analog) {
+                    Console.WriteLine(" -> Analogovy signal (preskoceno)");
+                    continue;
+                }
+
+                // Digitalni signal -> spust analyzator
+                var analyzer = new DigitalSignalAnalyzer(loader.SignalData, channelName);
+                var (_, _, avgInterval, baudRate) = analyzer.AnalyzeTiming();
+
+                if (baudRate <= 0) {
+                    Console.WriteLine(" -> Nepodarilo se spocitat baud rate");
+                    continue;
+                }
+
+                // Detekce UART
+                bool isUART = ProtocolDetector.DetectUARTProtocol(analyzer.GetSamples(), baudRate);
+
+                if (isUART) {
+                    Console.WriteLine($" -> Detekovan UART ({baudRate:F0} baud)");
+
+                    var uart = new UartProtocolAnalyzer();
+                    uart.Analyze(analyzer.GetSamples(), baudRate);
+
+                    string exportPath = $"uart_output_{channelName}.csv";
+                    uart.ExportResults(exportPath);
+                    Console.WriteLine($" -> UART vystup ulozen do: {exportPath}");
+                } else {
+                    Console.WriteLine(" -> UART pravdepodobne nebyl detekovan");
+                }
             }
-
-            Console.WriteLine($"Odhad baud rate: {baudRate:F0} baud");
-
-            // Inicializace UART analyzeru
-            IProtocolAnalyzer uartAnalyzer = new UartProtocolAnalyzer();
-            uartAnalyzer.Analyze(analyzer.GetSamples(), baudRate);
-
-            // Export vysledku
-            uartAnalyzer.ExportResults(exportPath);
-            Console.WriteLine($"Vysledky byly ulozeny do: {exportPath}");
-
-            analyzer.PrintTimingSummary();
-
-            bool isUART = ProtocolDetector.DetectUARTProtocol(analyzer.GetSamples(), baudRate);
-            Console.WriteLine(isUART ? "Detekovan UART protokol." : "UART pravdepodobne nebyl detekovan.");
         }
         catch (Exception ex) {
             Console.WriteLine($"CHYBA: {ex.Message}");
