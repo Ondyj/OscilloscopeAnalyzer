@@ -3,70 +3,48 @@ using OscilloscopeCLI.Signal;
 using System.Collections.Generic;
 using System.Linq;
 
-class Program
-{
-    static void Main()
-    {
-        string filePathCSV = "data/pwm50z.csv"; // pwm50z.csv , rs115200.csv , rs115200_scr.csv
-        //string filePathTXT = "data/rs115200_scr_csv.txt";
+class Program {
+    // POUZE TESTOVACI TRIDA NA ODLADENI FUKNCI!!
+    static void Main() {
+        string filePathCSV = "testData/DSLogic U2Pro16-la-250307-130617_spi.csv"; // nacitany soubor rs115200_scr
+        // string filePathCSV = "testData/DSLogic U2Pro16-la-250307-130617_spi.csv";
 
-        try
-        {
-            // Načtení signálu
+        try {
+            // Nacteni signalu
             SignalLoader loader = new SignalLoader();
             loader.LoadCsvFile(filePathCSV);
 
-            // Načtení konfigurace osciloskopu
-            //OscilloscopeConfig config = new OscilloscopeConfig();
-            //config.LoadTxtFile(filePathTXT);
-
-            //Console.WriteLine($"Model osciloskopu: {config.Model}");
-            //Console.WriteLine($"Vzorkovaci frekvence: {config.SamplingRate} Sa/s");
-            //Console.WriteLine($"Casovy rozsah: {config.TimeScale}s");
-
-            // VYPSÁNÍ NAČTENÝCH DAT
-            Console.WriteLine("\nPŘEHLED NAČTENÝCH DAT:");
-            if (loader.SignalData.Count > 0)
-            {
-                foreach (var channel in loader.SignalData)
-                {
-                    Console.WriteLine($"Kanál: {channel.Key}, Počet vzorků: {channel.Value.Count}");
-                    
-                    // Výpis prvních 10 vzorků pro kontrolu
-                    foreach (var sample in channel.Value.Take(10))
-                    {
-                        Console.WriteLine($" {sample.Item1}s -> {sample.Item2}V");
-                    }
-                    Console.WriteLine("...");
-                }
-            }
-            else
-            {
-                Console.WriteLine("Žádná signální data nebyla načtena.");
+            if (loader.SignalData.Count == 0) {
+                Console.WriteLine("Zadna signalni data nebyla nactena.");
+                return;
             }
 
-            // VYBEREME PRVNÍ KANÁL ZE SIGNALDATA
-            if (loader.SignalData.Count > 0)
-            {
-                var firstChannel = loader.SignalData.First();
-                string channelName = firstChannel.Key;
-                List<double> signalValues = firstChannel.Value.Select(t => t.Item2).ToList();
+            // Vyber prvni kanal
+            var firstChannel = loader.SignalData.First();
+            string channelName = firstChannel.Key;
+            Console.WriteLine($"Analyzujeme kanal: {channelName}");
 
-                Console.WriteLine($"Analyzujeme kanál: {channelName}");
+            // Inicializace analyzatoru
+            DigitalSignalAnalyzer analyzer = new DigitalSignalAnalyzer(loader.SignalData, channelName);
 
-                // ANALÝZA SIGNÁLU
-                //AnalyzeSignal analyzer = new AnalyzeSignal(signalValues);
-                //var signalType = analyzer.DetectSignalType();
-                //Console.WriteLine($"Detekovaný typ signálu: {signalType}");
+            // Detekce hran
+            List<double> edges = analyzer.DetectEdges();
+            Console.WriteLine($"Detekovane hrany: {edges.Count}");
+            foreach (var edge in edges.Take(10)) {
+                Console.WriteLine($"Hrana v {edge}s");
             }
-            else
-            {
-                Console.WriteLine("Žádná signální data nebyla načtena.");
+
+            // Mereni pulzu
+            var pulses = analyzer.MeasurePulses();
+            Console.WriteLine($"Detekovane pulzy: {pulses.Count}");
+            foreach (var pulse in pulses.Take(10)) {
+                Console.WriteLine($"Pulz {pulse.State} od {pulse.Start}s do {pulse.End}s, sirka: {pulse.Width}s");
             }
+
+            analyzer.PrintTimingSummary();
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Chyba: {ex.Message}");
+        catch (Exception ex) {
+            Console.WriteLine($"CHYBA: {ex.Message}");
         }
     }
 }
