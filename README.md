@@ -1,13 +1,12 @@
 # OscilloscopeAnalyzer
-
-
+```bash
 dotnet clean
 dotnet build
 
 spusteni programu 
 dotnet run --project src/OscilloscopeCLI
 dotnet run --project src/OscilloscopeGUI
-
+```
 
 # Struktura projektu
 ```bash
