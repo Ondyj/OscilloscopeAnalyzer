@@ -10,6 +10,7 @@ dotnet run --project src/OscilloscopeGUI
 
 
 # Struktura projektu
+```bash
 OscilloscopeAnalyzer/
 │
 ├── src/
@@ -26,3 +27,4 @@ OscilloscopeAnalyzer/
 │       └── OscilloscopeGUI.csproj
 │
 └── README.md                         # Dokumentace k projektu 
+```
