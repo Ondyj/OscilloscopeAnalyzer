@@ -18,8 +18,19 @@
         <!-- Tlacitka nahore -->
         <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="10">
             <Button Content="Načíst CSV" Width="120" Click="LoadCsv_Click" Margin="5"/>
-            <Button Content="Min/Max hodnoty" Width="120" Click="MinMaxButton_Click" Margin="5"/>
-             <Button Content="Detekce pulzů" Width="120" Click="PulseDetectionButton_Click" Margin="5"/>
+
+            <!-- Novy protokolovy vyber -->
+            <TextBlock Text="Protokol:" VerticalAlignment="Center" Margin="20,0,5,0"/>
+            <ComboBox x:Name="ProtocolComboBox" Width="80" SelectedIndex="0" Margin="0,0,10,0">
+                <ComboBoxItem Content="UART"/>
+                <ComboBoxItem Content="SPI"/>
+                <ComboBoxItem Content="I2C"/>
+            </ComboBox>
+
+            <RadioButton x:Name="AutoDetectRadio" Content="Auto" IsChecked="True" VerticalAlignment="Center" Margin="0,0,5,0"/>
+            <RadioButton x:Name="ManualRadio" Content="Ručně" VerticalAlignment="Center" Margin="0,0,10,0"/>
+
+            <Button Content="Analyzovat" Width="100" Click="AnalyzeButton_Click" Margin="5"/>
         </StackPanel>
 
         <!-- Graf (ScottPlot) zabira cele zbyvajici misto -->

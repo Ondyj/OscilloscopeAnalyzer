@@ -5,6 +5,9 @@ using System.Windows;
 using Microsoft.Win32;
 using ScottPlot;
 using OscilloscopeCLI.Signal;
+using System.Windows.Controls;
+using OscilloscopeCLI.ProtocolSettings;
+using OscilloscopeCLI.Protocols;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
@@ -173,6 +176,85 @@ namespace OscilloscopeGUI {
 
             plot.Refresh(); // Aktualizace grafu
         }
+
+    /// <summary>
+    /// Handler pro kliknuti na tlacitko "Analyzovat"
+    /// </summary>
+    private void AnalyzeButton_Click(object sender, RoutedEventArgs e) {
+        if (loader.SignalData.Count == 0) {
+            MessageBox.Show("Neni nacten zadny signal.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "";
+        bool isManual = ManualRadio.IsChecked == true;
+
+        switch (selectedProtocol) {
+            case "UART":
+                if (isManual) {
+                    // Zatim zadavame hodnoty natvrdo – pozdeji se nahradi GUI dialogem
+                    var settings = new UartSettings {
+                        BaudRate = 9600,
+                        DataBits = 8,
+                        ParityEnabled = false,
+                        ParityEven = true,
+                        StopBits = 1,
+                        IdleHigh = false
+                    };
+                    RunUartAnalysisWithSettings(settings);
+                } else {
+                    RunUartAutoDetection();
+                }
+                break;
+
+            case "SPI":
+            case "I2C":
+                MessageBox.Show($"{selectedProtocol} zatim neni implementovano.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+
+            default:
+                MessageBox.Show("Neni vybran platny protokol.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Spusti automatickou detekci UART signalu a analyzu
+    /// </summary>
+    private void RunUartAutoDetection() {
+        var channel = loader.SignalData.First();
+        var analyzer = new DigitalSignalAnalyzer(loader.SignalData, channel.Key);
+        var samples = analyzer.GetSamples();
+
+        var (_, _, avgInterval, baudRate) = analyzer.AnalyzeTiming();
+        bool isUart = ProtocolDetector.DetectUARTProtocol(samples, baudRate);
+
+        if (!isUart) {
+            MessageBox.Show("Signal neodpovida UART komunikaci.", "Detekce UART", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var uart = new UartProtocolAnalyzer();
+        uart.Analyze(samples, baudRate);
+
+        // TODO export vysledku
+    }
+
+    /// <summary>
+    /// Spusti analyzu UART se zadanym nastavenim
+    /// </summary>
+    private void RunUartAnalysisWithSettings(UartSettings settings) {
+        var channel = loader.SignalData.First();
+        var analyzer = new DigitalSignalAnalyzer(loader.SignalData, channel.Key);
+        var samples = analyzer.GetSamples();
+
+        var uart = new UartProtocolAnalyzer();
+        uart.Analyze(samples, settings.BaudRate); // Zatim pouzivame jen baudrate – ostatni se doplni pozdeji
+
+        // TODO export vysledku
+}
+
+
 
     }
 }
