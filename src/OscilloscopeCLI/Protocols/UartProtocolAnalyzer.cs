@@ -29,7 +29,7 @@ namespace OscilloscopeCLI.Protocols {
 
                     // Nacitani bitu (vcetne start bitu)
                     byte value = 0;
-                    bool errorDetected = false;
+                    
 
                     for (int bit = 0; bit < 8; bit++) {
                         double sampleTime = startTime + (bit + 1) * bitDuration;
