@@ -78,20 +78,19 @@ namespace OscilloscopeGUI {
             switch (selectedProtocol) {
                 case "UART":
                     if (isManual) {
-                        var settings = new UartSettings {
-                            BaudRate = 9600,
-                            DataBits = 8,
-                            ParityEnabled = false,
-                            ParityEven = true,
-                            StopBits = 1,
-                            IdleHigh = false
-                        };
-                        result = uartService.AnalyzeWithSettings(loader.SignalData, settings);
+                        // Otevreni dialogu pro rucni zadani nastaveni UART
+                        var dialog = new UartSettingsDialog();
+                        bool? confirmed = dialog.ShowDialog();
+
+                        if (confirmed == true) {
+                            var settings = dialog.Settings;
+                            result = uartService.AnalyzeWithSettings(loader.SignalData, settings);
+                            MessageBox.Show(result, "Vystup UART", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
                     } else {
                         result = uartService.AnalyzeAuto(loader.SignalData);
+                        MessageBox.Show(result, "Vystup UART", MessageBoxButton.OK, MessageBoxImage.Information);
                     }
-
-                    MessageBox.Show(result, "Vystup UART", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
 
                 case "SPI":
