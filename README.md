@@ -7,6 +7,18 @@
 - **Kolečko myši** – přibližování / oddalování
 - Doporučení: pokud se chceš podívat detailněji na průběh signálu, **nejprve si graf roztáhni pomocí klávesy `W`**
 
+## Spustitelná verze
+Spustitelný soubor je dostupný ve formě ZIP archivu:
+
+```
+Spustitelny_soubor.zip
+
+```
+Po rozbalení stačí spustit soubor:
+
+```
+OscilloscopeGUI.exe
+```
 
 ## Sestavení a spuštění
 ```bash
@@ -16,6 +28,9 @@ dotnet build
 spusteni programu 
 dotnet run --project src/OscilloscopeCLI
 dotnet run --project src/OscilloscopeGUI
+
+zabaleni projektu
+dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
 ```
 
 # Struktura projektu
