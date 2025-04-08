@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using OscilloscopeCLI.ProtocolSettings;
 using OscilloscopeCLI.Signal;
 
 namespace OscilloscopeCLI.Protocols {
@@ -11,50 +12,87 @@ namespace OscilloscopeCLI.Protocols {
         private List<(double Timestamp, byte ByteValue)> _decodedBytes = new();
         private List<(double Timestamp, string Error)> _errors = new();
 
-        public void Analyze(List<DigitalSignalAnalyzer.SignalSample> samples, double baudRate) {
+        public void Analyze(List<DigitalSignalAnalyzer.SignalSample> samples, IProtocolSettings settings) {
             _decodedBytes.Clear();
             _errors.Clear();
 
-            if (samples == null || samples.Count == 0 || baudRate <= 0) {
+            // Osetreni typu nastaveni
+            if (settings is not UartSettings uartSettings) {
+                _errors.Add((0, "Neplatne nastaveni UART."));
+                return;
+            }
+
+            if (samples == null || samples.Count == 0 || uartSettings.BaudRate <= 0) {
                 _errors.Add((0, "Neplatne vstupni parametry nebo nulovy baud rate."));
                 return;
             }
 
-            double bitDuration = 1.0 / baudRate;
+            double bitDuration = 1.0 / uartSettings.BaudRate;
 
             for (int i = 0; i < samples.Count - 10; i++) {
-                if (samples[i].State == false && samples[i + 1].State == false) {
-                    // Pravdepodobny start bit (prechod na LOW)
+                bool level = uartSettings.IdleHigh;
+                bool startDetected = samples[i].State != level && samples[i + 1].State != level;
+
+                if (startDetected) {
                     double startTime = samples[i].Timestamp;
-
-                    // Nacitani bitu (vcetne start bitu)
                     byte value = 0;
-                    
 
-                    for (int bit = 0; bit < 8; bit++) {
+                    // Cteni datovych bitu
+                    for (int bit = 0; bit < uartSettings.DataBits; bit++) {
                         double sampleTime = startTime + (bit + 1) * bitDuration;
                         bool bitValue = GetBitAtTime(samples, sampleTime);
+                        if (uartSettings.IdleHigh) bitValue = !bitValue;
 
                         if (bitValue)
                             value |= (byte)(1 << bit); // LSB first
                     }
 
-                    // Kontrola stop bitu
-                    double stopBitTime = startTime + 9 * bitDuration;
-                    bool stopBit = GetBitAtTime(samples, stopBitTime);
+                    int parityOffset = uartSettings.DataBits + 1;
 
-                    if (!stopBit) {
+                    // Kontrola parity pokud je aktivni
+                    if (uartSettings.ParityEnabled) {
+                        double parityTime = startTime + parityOffset * bitDuration;
+                        bool parityBit = GetBitAtTime(samples, parityTime);
+                        if (uartSettings.IdleHigh) parityBit = !parityBit;
+
+                        int oneBits = 0;
+                        for (int b = 0; b < uartSettings.DataBits; b++)
+                            if ((value & (1 << b)) != 0) oneBits++;
+
+                        bool expectedParity = uartSettings.ParityEven ? (oneBits % 2 == 0) : (oneBits % 2 != 0);
+                        if (parityBit != expectedParity) {
+                            _errors.Add((startTime, "Chybna parita"));
+                            continue;
+                        }
+                    }
+
+                    // Kontrola stop bitu
+                    int stopStart = uartSettings.DataBits + 1 + (uartSettings.ParityEnabled ? 1 : 0);
+                    bool validStop = true;
+                    for (int sb = 0; sb < uartSettings.StopBits; sb++) {
+                        double stopTime = startTime + (stopStart + sb) * bitDuration;
+                        bool stopBit = GetBitAtTime(samples, stopTime);
+                        if (uartSettings.IdleHigh) stopBit = !stopBit;
+                        if (!stopBit) validStop = false;
+                    }
+
+                    if (!validStop) {
                         _errors.Add((startTime, "Chybny stop bit"));
                         continue;
                     }
 
                     _decodedBytes.Add((startTime, value));
-
-                    // Posun na konec ramce
-                    i = FindIndexAfterTime(samples, stopBitTime);
+                    double frameEndTime = startTime + (stopStart + uartSettings.StopBits) * bitDuration;
+                    i = FindIndexAfterTime(samples, frameEndTime);
                 }
             }
+
+           string outputDir = "Vysledky";
+            Directory.CreateDirectory(outputDir); // zajisti, ze slozka existuje
+            string outputPath = GetNextAvailableFilename(outputDir, "uart_output.csv");
+            ExportResults(outputPath);
         }
+
 
         public void ExportResults(string outputPath) {
             using var writer = new StreamWriter(outputPath);
@@ -75,6 +113,20 @@ namespace OscilloscopeCLI.Protocols {
                     writer.WriteLine($"{ts.ToString("F6", CultureInfo.InvariantCulture)};;;{err}");
                 }
             }
+        }
+
+        private string GetNextAvailableFilename(string directory, string baseName) {
+            string fullPath = Path.Combine(directory, baseName);
+            string nameWithoutExt = Path.GetFileNameWithoutExtension(baseName);
+            string extension = Path.GetExtension(baseName);
+
+            int counter = 1;
+            while (File.Exists(fullPath)) {
+                fullPath = Path.Combine(directory, $"{nameWithoutExt}{counter}{extension}");
+                counter++;
+            }
+
+            return fullPath;
         }
 
         /// <summary>

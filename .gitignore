@@ -6,6 +6,7 @@
 # Ignore
 testData/
 Spustitelny soubor/
+Vysledky/
 
 # User-specific files
 *.rsuser

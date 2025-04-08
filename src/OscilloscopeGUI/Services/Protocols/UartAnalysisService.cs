@@ -4,6 +4,7 @@ using System.Linq;
 using OscilloscopeCLI.ProtocolSettings;
 using OscilloscopeCLI.Protocols;
 using OscilloscopeCLI.Signal;
+using System.IO;
 
 namespace OscilloscopeGUI.Services.Protocols {
     /// <summary>
@@ -28,7 +29,18 @@ namespace OscilloscopeGUI.Services.Protocols {
                 return "Signal neodpovida UART komunikaci.";
 
             var uart = new UartProtocolAnalyzer();
-            uart.Analyze(samples, baudRate);
+
+            // Provizorni nastaveni pro automatickou analyzu
+            var autoSettings = new UartSettings {
+                BaudRate = baudRate,
+                DataBits = 8,
+                ParityEnabled = false,
+                ParityEven = true,
+                StopBits = 1,
+                IdleHigh = false
+            };
+
+            uart.Analyze(samples, autoSettings);
 
             return "TODO: dodelat export vysledku";
         }
@@ -45,9 +57,30 @@ namespace OscilloscopeGUI.Services.Protocols {
             var samples = analyzer.GetSamples();
 
             var uart = new UartProtocolAnalyzer();
-            uart.Analyze(samples, settings.BaudRate); // Pozdeji rozsirit o dalsi nastaveni
+            uart.Analyze(samples, settings);
 
-            return "TODO: dodelat export vysledku";
+            // Priprava slozky a vygenerovani nazvu souboru
+            string outputDir = "Vysledky";
+            Directory.CreateDirectory(outputDir); // vytvori slozku pokud neexistuje
+            string outputFile = GetNextAvailableFilename(outputDir, "uart_output.csv");
+
+            uart.ExportResults(outputFile);
+
+            return $"Výsledek uložen do souboru: {outputFile}";
+        }
+
+        private string GetNextAvailableFilename(string directory, string baseName) {
+            string fullPath = Path.Combine(directory, baseName);
+            string nameWithoutExt = Path.GetFileNameWithoutExtension(baseName);
+            string extension = Path.GetExtension(baseName);
+
+            int counter = 1;
+            while (File.Exists(fullPath)) {
+                fullPath = Path.Combine(directory, $"{nameWithoutExt}{counter}{extension}");
+                counter++;
+            }
+
+            return fullPath;
         }
     }
 }

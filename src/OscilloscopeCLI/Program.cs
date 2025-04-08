@@ -52,7 +52,7 @@ class Program {
                     Console.WriteLine($" -> Detekovan UART ({baudRate:F0} baud)");
 
                     var uart = new UartProtocolAnalyzer();
-                    uart.Analyze(analyzer.GetSamples(), baudRate);
+                    //uart.Analyze(analyzer.GetSamples(), baudRate);
 
                     string exportPath = $"uart_output_{channelName}.csv";
                     uart.ExportResults(exportPath);
