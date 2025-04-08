@@ -1,4 +1,14 @@
 # OscilloscopeAnalyzer
+
+## Ovládání grafu (vizualizace signálu)
+```bash
+- **W** – roztahuje graf na časové ose (zoom in)
+- **S** – stahuje graf na časové ose (zoom out)
+- **Kolečko myši** – přibližování / oddalování
+- Doporučení: pokud se chceš podívat detailněji na průběh signálu, **nejprve si graf roztáhni pomocí klávesy `W`**
+```
+
+## Sestavení a spuštění
 ```bash
 dotnet clean
 dotnet build
