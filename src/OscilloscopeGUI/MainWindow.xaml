@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:OscilloscopeGUI"
         xmlns:ScottPlot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
         mc:Ignorable="d"
-        Title="Oscilloscope Analyzer" Height="700" Width="1000">
+        Title="Oscilloscope Analyzer" Height="700" Width="1000" WindowStartupLocation="CenterScreen">
     
     <Grid>
         <!-- Definice radku pro tlacitka a zbytek okna pro graf -->

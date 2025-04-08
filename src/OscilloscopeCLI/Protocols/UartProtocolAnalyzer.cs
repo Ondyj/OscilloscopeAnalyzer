@@ -86,14 +86,11 @@ namespace OscilloscopeCLI.Protocols {
                     i = FindIndexAfterTime(samples, frameEndTime);
                 }
             }
-
-           string outputDir = "Vysledky";
-            Directory.CreateDirectory(outputDir); // zajisti, ze slozka existuje
-            string outputPath = GetNextAvailableFilename(outputDir, "uart_output.csv");
-            ExportResults(outputPath);
         }
 
-
+        /// <summary>
+        /// Exportuje dekodovana data a chyby do CSV souboru.
+        /// </summary>
         public void ExportResults(string outputPath) {
             using var writer = new StreamWriter(outputPath);
 
@@ -113,20 +110,6 @@ namespace OscilloscopeCLI.Protocols {
                     writer.WriteLine($"{ts.ToString("F6", CultureInfo.InvariantCulture)};;;{err}");
                 }
             }
-        }
-
-        private string GetNextAvailableFilename(string directory, string baseName) {
-            string fullPath = Path.Combine(directory, baseName);
-            string nameWithoutExt = Path.GetFileNameWithoutExtension(baseName);
-            string extension = Path.GetExtension(baseName);
-
-            int counter = 1;
-            while (File.Exists(fullPath)) {
-                fullPath = Path.Combine(directory, $"{nameWithoutExt}{counter}{extension}");
-                counter++;
-            }
-
-            return fullPath;
         }
 
         /// <summary>
