@@ -8,7 +8,7 @@ using OscilloscopeCLI.Protocols;
 class Program {
     // POUZE TESTOVACI TRIDA NA ODLADENI FUNKCI
     static void Main() {
-        string filePathCSV = "testData/DSLogic U2Pro16-la-250307-130617_spi.csv";
+        string filePathCSV = "testData/0704/DSLogic U2Pro16-la-250404-224717_uart_5mhz_tx_rx_ver1.csv";
 
         try {
             // Nacteni signalu

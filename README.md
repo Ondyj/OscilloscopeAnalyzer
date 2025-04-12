@@ -12,7 +12,6 @@ Spustitelný soubor je dostupný ve formě ZIP archivu:
 
 ```
 Spustitelny_soubor.zip
-
 ```
 Po rozbalení stačí spustit soubor:
 

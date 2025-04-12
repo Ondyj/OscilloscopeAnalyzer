@@ -31,7 +31,7 @@ namespace OscilloscopeCLI.Protocols {
 
             for (int i = 0; i < samples.Count - 10; i++) {
                 bool level = uartSettings.IdleHigh;
-                bool startDetected = samples[i].State != level && samples[i + 1].State != level;
+                bool startDetected = samples[i].State != level && samples[i + 1].Timestamp - samples[i].Timestamp > bitDuration / 2;
 
                 if (startDetected) {
                     double startTime = samples[i].Timestamp;

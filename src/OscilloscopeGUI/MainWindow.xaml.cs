@@ -35,7 +35,6 @@ namespace OscilloscopeGUI {
                 bool success = await fileService.LoadFromCsvAsync(loader);
 
                 if (!success) {
-                    MessageBox.Show("Soubor neobsahuje platna data.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
@@ -59,7 +58,6 @@ namespace OscilloscopeGUI {
         private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e) {
             navService.HandleKey(e.Key);
         }
-
 
         /// <summary>
         /// Handler pro kliknuti na tlacitko "Analyzovat"
