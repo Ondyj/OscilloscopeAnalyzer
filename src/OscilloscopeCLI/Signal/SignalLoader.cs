@@ -13,7 +13,7 @@ namespace OscilloscopeCLI.Signal {
         /// Nacte signalni data z CSV souboru v ruznych formatech (osciloskop, logicky analyzator, obecny CSV).
         /// </summary>
         /// <param name="filePath">Cesta k souboru.</param>
-        public void LoadCsvFile(string filePath) {
+        public void LoadCsvFile(string filePath, IProgress<int>? progress = null, CancellationToken cancellationToken = default) {
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"Soubor {filePath} nebyl nalezen.");
 
@@ -27,9 +27,9 @@ namespace OscilloscopeCLI.Signal {
                                         firstRow.Contains("Start") && firstRow.Contains("Increment");
 
             if (isOscilloscopeFormat) {
-                LoadOscilloscopeData(lines);
+                LoadOscilloscopeData(lines, progress, cancellationToken);
             } else {
-                LoadLogicAnalyzerData(lines);
+                LoadLogicAnalyzerData(lines, progress, cancellationToken);
             }
 
             // Odstraneni prazdnych kanalu
@@ -39,7 +39,7 @@ namespace OscilloscopeCLI.Signal {
         /// <summary>
         /// Nacte osciloskopova data, ktera obsahuji X, CH kanaly, Start a Increment.
         /// </summary>
-        private void LoadOscilloscopeData(string[] lines) {
+        private void LoadOscilloscopeData(string[] lines, IProgress<int>? progress = null, CancellationToken cancellationToken = default) {
             Console.WriteLine("Detekovan osciloskopovy format.");
 
             var headers = lines[0].Split(',');
@@ -60,7 +60,15 @@ namespace OscilloscopeCLI.Signal {
             }
 
             for (int i = 2; i < lines.Length; i++) {
+
+                cancellationToken.ThrowIfCancellationRequested(); // kontrola ruseni
+
                 var parts = lines[i].Split(',');
+
+                 if (i % 100 == 0) {
+                    int percent = (int)(((i - 2) / (double)(lines.Length - 2)) * 100);
+                    progress?.Report(percent);
+                }
 
                 if (parts.Length < headers.Length - 2) continue;
 
@@ -72,12 +80,13 @@ namespace OscilloscopeCLI.Signal {
                     }
                 }
             }
+            progress?.Report(100);
         }
 
         /// <summary>
         /// Nacte data z logickeho analyzatoru
         /// </summary>
-        private void LoadLogicAnalyzerData(string[] lines) {
+        private void LoadLogicAnalyzerData(string[] lines, IProgress<int>? progress = null, CancellationToken cancellationToken = default) {
             Console.WriteLine("Detekovan format logickeho analyzatoru.");
 
             int headerIndex = Array.FindIndex(lines, line => line.StartsWith("Time("));
@@ -90,9 +99,19 @@ namespace OscilloscopeCLI.Signal {
                 SignalData[channelName] = new List<Tuple<double, double>>();
             }
 
+            int dataLines = lines.Length - headerIndex - 1;
+
             for (int i = headerIndex + 1; i < lines.Length; i++) {
+
+                cancellationToken.ThrowIfCancellationRequested(); // kontrola ruseni
+
                 var parts = lines[i].Split(',');
                 if (parts.Length != headers.Length) continue;
+
+                if ((i - headerIndex - 1) % 100 == 0) {
+                    int percent = (int)(((i - headerIndex - 1) / (double)dataLines) * 100);
+                    progress?.Report(percent);
+                }
 
                 if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double time))
                     continue;
@@ -104,6 +123,7 @@ namespace OscilloscopeCLI.Signal {
                     }
                 }
             }
+            progress?.Report(100);
         }
 
         /// <summary>

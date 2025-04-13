@@ -30,20 +30,64 @@ namespace OscilloscopeGUI {
         /// <summary>
         /// Handler pro kliknuti na tlacitko "Nacist CSV"
         /// </summary>
-        private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
-            try {
-                bool success = await fileService.LoadFromCsvAsync(loader);
+private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
+            var cts = new CancellationTokenSource(); // token pro zruseni
+            var progressDialog = new ProgressDialog(); // dialog s prubehem nacitani
+            progressDialog.Show();
 
-                if (!success) {
+            // progres se reportuje do dialogu
+            var progress = new Progress<int>(value => {
+                progressDialog.ReportProgress(value);
+            });
+
+            // akce pri kliknuti na tlacitko "Zrusit"
+            progressDialog.OnCanceled = () => {
+                cts.Cancel(); // vyvola zruseni v dalsim behu
+            };
+
+            try {
+                // pokus o nacteni CSV dat asynchronne
+                bool success = await fileService.LoadFromCsvAsync(loader, progress, cts.Token);
+
+                // uzivatel zavrel dialog bez vyberu souboru
+                if (!success && loader.SignalData.Count == 0 && !cts.IsCancellationRequested) {
+                    progressDialog.Finish("Nebyly vybrany zadne soubory.", autoClose: true);
                     return;
                 }
 
-                await PlotSignalGraphAsync();
+                // pokud byl token zrusen (napr. uzivatel klikl na "Zrusit")
+                if (cts.IsCancellationRequested) {
+                    progressDialog.Finish("Nacitani bylo zruseno uzivatelem.", autoClose: true);
+                    return;
+                }
+
+                
+                // pokud nacitani probehlo uspesne
+                if (success) {
+                    await PlotSignalGraphAsync();
+                    progressDialog.Finish(); // zobrazi tlacitko OK
+                    progressDialog.OnOkClicked = () => {};
+                } else {
+                    // nacitani se nezdarilo (napr. prazdny soubor, spatny format, atd.)
+                    progressDialog.Finish("Nacitani se nezdarilo.", autoClose: false);
+                    progressDialog.OnOkClicked = () => { };
+                }
             }
+            // pokud doslo ke zruseni tokenem
+            catch (OperationCanceledException) {
+                progressDialog.Finish("Nacitani bylo zruseno.", autoClose: false);
+            }
+            // pokud se stala jina necekana chyba
             catch (Exception ex) {
-                MessageBox.Show(ex.Message, "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                if (progressDialog == null) {
+                    progressDialog = new ProgressDialog();
+                    progressDialog.Show();
+                }
+                progressDialog.Finish($"Chyba pri nacitani: {ex.Message}", autoClose: false);
+                progressDialog.OnOkClicked = () => { };
             }
         }
+
 
         /// <summary>
         /// Asynchronne vykresli vsechny signaly pomoci tridy SignalPlotter
