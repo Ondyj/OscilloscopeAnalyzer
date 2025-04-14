@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Windows.Media;
 
 namespace OscilloscopeGUI {
     public partial class ProgressDialog : Window {
@@ -34,6 +35,10 @@ namespace OscilloscopeGUI {
         private void CancelButton_Click(object sender, RoutedEventArgs e) {
             OnCanceled?.Invoke();
             Close();
+        }
+
+        public void SetErrorState() {
+            ProgressBar.Foreground = Brushes.Red; 
         }
     }
 }

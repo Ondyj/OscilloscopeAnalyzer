@@ -30,61 +30,67 @@ namespace OscilloscopeGUI {
         /// <summary>
         /// Handler pro kliknuti na tlacitko "Nacist CSV"
         /// </summary>
-private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
-            var cts = new CancellationTokenSource(); // token pro zruseni
-            var progressDialog = new ProgressDialog(); // dialog s prubehem nacitani
+        private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
+            var cts = new CancellationTokenSource();
+
+            // dialog pro vyber souboru
+            OpenFileDialog openFileDialog = new OpenFileDialog {
+                Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+            };
+
+            bool fileSelected = openFileDialog.ShowDialog() == true;
+            if (!fileSelected) {
+                return; // uzivatel zrusil vyber
+            }
+
+            // vytvoreni progressbaru
+            var progressDialog = new ProgressDialog();
             progressDialog.Show();
 
-            // progres se reportuje do dialogu
             var progress = new Progress<int>(value => {
                 progressDialog.ReportProgress(value);
             });
 
-            // akce pri kliknuti na tlacitko "Zrusit"
             progressDialog.OnCanceled = () => {
-                cts.Cancel(); // vyvola zruseni v dalsim behu
+                cts.Cancel();
             };
 
             try {
-                // pokus o nacteni CSV dat asynchronne
-                bool success = await fileService.LoadFromCsvAsync(loader, progress, cts.Token);
+                // Nacteme data z vybraneho souboru
+                bool success = await Task.Run(() =>
+                    {
+                        loader.LoadCsvFile(openFileDialog.FileName, progress, cts.Token);
+                        return loader.SignalData.Count > 0;
+                    }, cts.Token);
 
-                // uzivatel zavrel dialog bez vyberu souboru
-                if (!success && loader.SignalData.Count == 0 && !cts.IsCancellationRequested) {
-                    progressDialog.Finish("Nebyly vybrany zadne soubory.", autoClose: true);
-                    return;
-                }
-
-                // pokud byl token zrusen (napr. uzivatel klikl na "Zrusit")
                 if (cts.IsCancellationRequested) {
-                    progressDialog.Finish("Nacitani bylo zruseno uzivatelem.", autoClose: true);
+                    progressDialog.Finish("Načítání bylo zrušeno uživatelem.", autoClose: false);
+                    progressDialog.OnOkClicked = () => progressDialog.Close();
                     return;
                 }
 
-                
-                // pokud nacitani probehlo uspesne
-                if (success) {
-                    await PlotSignalGraphAsync();
-                    progressDialog.Finish(); // zobrazi tlacitko OK
-                    progressDialog.OnOkClicked = () => {};
-                } else {
-                    // nacitani se nezdarilo (napr. prazdny soubor, spatny format, atd.)
-                    progressDialog.Finish("Nacitani se nezdarilo.", autoClose: false);
-                    progressDialog.OnOkClicked = () => { };
+                if (!success) {
+                    progressDialog.SetErrorState();
+                    progressDialog.Finish("Načítání selhalo nebo byl načten poškozený soubor.", autoClose: false);
+                    progressDialog.OnOkClicked = () => progressDialog.Close();
+                    return;
                 }
+
+                // pokud uspesne nacteno
+                await PlotSignalGraphAsync();
+                progressDialog.Finish("Načítání dokončeno.", autoClose: false);
+                progressDialog.OnOkClicked = () => progressDialog.Close();
             }
-            // pokud doslo ke zruseni tokenem
             catch (OperationCanceledException) {
-                progressDialog.Finish("Nacitani bylo zruseno.", autoClose: false);
+                progressDialog.Finish("Načítání bylo zrušeno.", autoClose: false);
+                progressDialog.OnOkClicked = () => progressDialog.Close();
             }
-            // pokud se stala jina necekana chyba
             catch (Exception ex) {
-                if (progressDialog == null) {
-                    progressDialog = new ProgressDialog();
-                    progressDialog.Show();
-                }
-                progressDialog.Finish($"Chyba pri nacitani: {ex.Message}", autoClose: false);
-                progressDialog.OnOkClicked = () => { };
+                progressDialog.SetErrorState();
+                progressDialog.Finish($"Chyba při načítání: {ex.Message}", autoClose: false);
+                progressDialog.OnOkClicked = () => {
+                    progressDialog.Close();
+                };
             }
         }
 
