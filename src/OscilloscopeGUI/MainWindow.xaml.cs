@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using Microsoft.Win32;
 using ScottPlot;
+using ScottPlot.WPF;
 using OscilloscopeCLI.Signal;
 using System.Windows.Controls;
 using OscilloscopeCLI.ProtocolSettings;
@@ -11,6 +12,7 @@ using OscilloscopeCLI.Protocols;
 using OscilloscopeGUI.Plotting;
 using OscilloscopeGUI.Services;
 using OscilloscopeGUI.Services.Protocols;
+using System.Windows.Input;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
@@ -22,7 +24,13 @@ namespace OscilloscopeGUI {
 
         public MainWindow() {
             InitializeComponent();
+
+            plot.UserInputProcessor.Disable(); // zakazani cyhovzi chovani
+
             this.KeyDown += MainWindow_KeyDown; // Pripojeni obsluhy klavesnice
+
+            this.MouseWheel += MainWindow_MouseWheel;
+
             plotter = new SignalPlotter(plot); // Inicializace tridy pro vykreslovani
             navService = new PlotNavigationService(plot);
         }
@@ -107,6 +115,13 @@ namespace OscilloscopeGUI {
         /// </summary>
         private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e) {
             navService.HandleKey(e.Key);
+        }
+
+        /// <summary>
+        /// Obsluha pohybu kolecka mysi pro zoom
+        /// </summary>
+        private void MainWindow_MouseWheel(object sender, MouseWheelEventArgs e){
+            navService.HandleMouseWheel(e);
         }
 
         /// <summary>
