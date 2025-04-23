@@ -7,7 +7,6 @@ using ScottPlot;
 using ScottPlot.WPF;
 using OscilloscopeCLI.Signal;
 using System.Windows.Controls;
-using OscilloscopeCLI.ProtocolSettings;
 using OscilloscopeCLI.Protocols;
 using OscilloscopeGUI.Plotting;
 using OscilloscopeGUI.Services;

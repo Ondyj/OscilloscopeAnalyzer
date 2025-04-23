@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OscilloscopeCLI.ProtocolSettings;
 using OscilloscopeCLI.Protocols;
 using OscilloscopeCLI.Signal;
 using System.IO;

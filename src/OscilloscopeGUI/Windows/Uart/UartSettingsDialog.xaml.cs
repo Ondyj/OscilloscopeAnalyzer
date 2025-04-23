@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
-using OscilloscopeCLI.ProtocolSettings;
+using OscilloscopeCLI.Protocols;
 
 namespace OscilloscopeGUI {
     public partial class UartSettingsDialog : Window {

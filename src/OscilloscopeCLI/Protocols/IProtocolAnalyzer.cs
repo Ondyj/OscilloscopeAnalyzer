@@ -1,5 +1,4 @@
 using OscilloscopeCLI.Signal;
-using OscilloscopeCLI.ProtocolSettings;
 
 namespace OscilloscopeCLI.Protocols {
     public interface IProtocolAnalyzer {

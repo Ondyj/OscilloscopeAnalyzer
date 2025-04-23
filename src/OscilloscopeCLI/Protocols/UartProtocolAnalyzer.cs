@@ -2,10 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using OscilloscopeCLI.ProtocolSettings;
 using OscilloscopeCLI.Signal;
 
 namespace OscilloscopeCLI.Protocols {
+    public class UartSettings : IProtocolSettings {
+        public string ProtocolName => "UART";
+        public double BaudRate { get; set; }
+        public int DataBits { get; set; } = 8;
+        public bool ParityEnabled { get; set; } = false;
+        public bool ParityEven { get; set; } = true;
+        public int StopBits { get; set; } = 1;
+        public bool IdleHigh { get; set; } = false;
+    }
     public class UartProtocolAnalyzer : IProtocolAnalyzer {
         public string ProtocolName => "UART";
 
