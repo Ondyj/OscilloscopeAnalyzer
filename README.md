@@ -2,10 +2,9 @@
 
 ## Ovládání grafu (vizualizace signálu)
 
-- **W** – roztahuje graf na časové ose (zoom in)
-- **S** – stahuje graf na časové ose (zoom out)
-- **Kolečko myši** – přibližování / oddalování
-- Doporučení: pokud se chceš podívat detailněji na průběh signálu, **nejprve si graf roztáhni pomocí klávesy `W`**
+- **Kolečko myši** – přiblížení / oddálení (alternativa klavesy **W** / **S**)
+- **Klik kolečkem** - resetuje zobrazení na výchozí stav
+- **Držení levého tlačítka myši + tažení** – horizontální posun grafu (alternativa klavesy **A** / **D**)
 
 ## Spustitelná verze
 Spustitelný soubor je dostupný ve formě ZIP archivu:

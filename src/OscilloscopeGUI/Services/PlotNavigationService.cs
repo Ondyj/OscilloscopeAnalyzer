@@ -63,5 +63,34 @@ namespace OscilloscopeGUI.Services {
                 HandleKey(Key.S); // Scroll dolu = zoom out
             }
         }
+
+        /// <summary>
+        /// Resetuje pohled na graf do vychoziho stavu (jako po AutoScale)
+        /// </summary>
+        public void ResetView() {
+            plot.Plot.Axes.AutoScale();
+            plot.Refresh();
+        }
+
+        /// <summary>
+        /// Posune graf horizontálně podle rozdilu souradnic X v pixelech
+        /// </summary>
+        public void PanByPixelDelta(double deltaX) {
+            var xAxis = plot.Plot.Axes.Bottom;
+
+            double rangeX = xAxis.Max - xAxis.Min;
+
+            // Ziskame aktualni sirku oblasti grafu v pixelech
+            double widthPx = plot.ActualWidth;
+
+            if (widthPx <= 0) return;
+
+            double deltaUnits = (deltaX / widthPx) * rangeX;
+
+            xAxis.Min -= deltaUnits;
+            xAxis.Max -= deltaUnits;
+
+            plot.Refresh();
+        }
     }
 }

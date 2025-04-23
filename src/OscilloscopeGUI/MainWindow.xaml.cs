@@ -23,6 +23,9 @@ namespace OscilloscopeGUI {
         private SignalFileService fileService = new SignalFileService();
         private PlotNavigationService navService;
 
+        private bool isDragging = false;
+        private Point lastMousePosition;
+
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool AllocConsole();
@@ -40,6 +43,33 @@ namespace OscilloscopeGUI {
 
             plotter = new SignalPlotter(plot); // Inicializace tridy pro vykreslovani
             navService = new PlotNavigationService(plot);
+
+            plot.MouseDown += (s, e) => {
+                if (e.ChangedButton == MouseButton.Middle) {
+                    navService.ResetView();  // zavolani resetu kamery
+                    e.Handled = true;
+                }
+            };
+
+            plot.MouseLeftButtonDown += (s, e) => {
+                isDragging = true;
+                lastMousePosition = e.GetPosition(plot);
+                plot.CaptureMouse(); // zachytime mys
+            };
+
+            plot.MouseLeftButtonUp += (s, e) => {
+                isDragging = false;
+                plot.ReleaseMouseCapture(); // uvolnime mys
+            };
+
+            plot.MouseMove += (s, e) => {
+                if (isDragging) {
+                    Point currentPos = e.GetPosition(plot);
+                    double deltaX = currentPos.X - lastMousePosition.X;
+                    navService.PanByPixelDelta(deltaX);
+                    lastMousePosition = currentPos;
+                }
+            };
         }
 
         /// <summary>
