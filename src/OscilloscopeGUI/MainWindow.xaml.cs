@@ -13,6 +13,7 @@ using OscilloscopeGUI.Plotting;
 using OscilloscopeGUI.Services;
 using OscilloscopeGUI.Services.Protocols;
 using System.Windows.Input;
+using System.Runtime.InteropServices;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
@@ -22,7 +23,13 @@ namespace OscilloscopeGUI {
         private SignalFileService fileService = new SignalFileService();
         private PlotNavigationService navService;
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool AllocConsole();
+
         public MainWindow() {
+            AllocConsole(); // Otevreni konzole pro debug vypisy
+
             InitializeComponent();
 
             plot.UserInputProcessor.Disable(); // zakazani cyhovzi chovani
