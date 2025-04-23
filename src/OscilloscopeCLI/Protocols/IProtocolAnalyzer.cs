@@ -8,7 +8,7 @@ namespace OscilloscopeCLI.Protocols {
         /// <summary>
         /// Spusti analyzu signalu s nastavenim protokolu
         /// </summary>
-        public void Analyze(List<DigitalSignalAnalyzer.SignalSample> samples, IProtocolSettings settings);
+        public void Analyze(List<SignalSample> samples, IProtocolSettings settings);
 
         /// <summary>
         /// Exportuje vysledky analyzy do souboru

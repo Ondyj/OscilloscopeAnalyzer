@@ -12,7 +12,7 @@ namespace OscilloscopeCLI.Protocols {
         private List<(double Timestamp, byte ByteValue)> _decodedBytes = new();
         private List<(double Timestamp, string Error)> _errors = new();
 
-        public void Analyze(List<DigitalSignalAnalyzer.SignalSample> samples, IProtocolSettings settings) {
+        public void Analyze(List<SignalSample> samples, IProtocolSettings settings) {
             _decodedBytes.Clear();
             _errors.Clear();
 
@@ -115,7 +115,7 @@ namespace OscilloscopeCLI.Protocols {
         /// <summary>
         /// Vrati hodnotu bitu v danem case. Vyhleda nejblizsi vzorek.
         /// </summary>
-        private bool GetBitAtTime(List<DigitalSignalAnalyzer.SignalSample> samples, double time) {
+        private bool GetBitAtTime(List<SignalSample> samples, double time) {
             for (int i = 1; i < samples.Count; i++) {
                 if (samples[i].Timestamp >= time)
                     return samples[i - 1].State;
@@ -126,7 +126,7 @@ namespace OscilloscopeCLI.Protocols {
         /// <summary>
         /// Najde index vzorku, ktery je prvni za danym casem.
         /// </summary>
-        private int FindIndexAfterTime(List<DigitalSignalAnalyzer.SignalSample> samples, double time) {
+        private int FindIndexAfterTime(List<SignalSample> samples, double time) {
             for (int i = 0; i < samples.Count; i++) {
                 if (samples[i].Timestamp > time)
                     return i;

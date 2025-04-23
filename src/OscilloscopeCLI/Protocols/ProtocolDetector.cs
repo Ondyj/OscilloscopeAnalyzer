@@ -11,7 +11,7 @@ public static class ProtocolDetector {
     /// <param name="baudRate">Odhadovana baud rate (bitova rychlost)</param>
     /// <param name="minValidFrames">Minimalni pocet platnych ramcu pro potvrzeni</param>
     /// <returns>True pokud signal pravdepodobne odpovida UART</returns>
-    public static bool DetectUARTProtocol(List<DigitalSignalAnalyzer.SignalSample> samples, double baudRate, int minValidFrames = 3) {
+    public static bool DetectUARTProtocol(List<SignalSample> samples, double baudRate, int minValidFrames = 3) {
         if (samples == null || samples.Count < 10 || baudRate <= 0)
             return false;
 
@@ -43,7 +43,7 @@ public static class ProtocolDetector {
     /// <summary>
     /// Vrati hodnotu bitu v danem case (vyhleda nejblizsi vzorek)
     /// </summary>
-    private static bool GetBitAtTime(List<DigitalSignalAnalyzer.SignalSample> samples, double time) {
+    private static bool GetBitAtTime(List<SignalSample> samples, double time) {
         for (int i = 1; i < samples.Count; i++) {
             if (samples[i].Timestamp >= time)
                 return samples[i - 1].State;
@@ -54,7 +54,7 @@ public static class ProtocolDetector {
     /// <summary>
     /// Najde index prvniho vzorku za zadanym casem
     /// </summary>
-    private static int FindIndexAfterTime(List<DigitalSignalAnalyzer.SignalSample> samples, double time) {
+    private static int FindIndexAfterTime(List<SignalSample> samples, double time) {
         for (int i = 0; i < samples.Count; i++) {
             if (samples[i].Timestamp > time)
                 return i;

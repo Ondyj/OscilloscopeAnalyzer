@@ -32,6 +32,24 @@ namespace OscilloscopeCLI.Signal {
                 LoadLogicAnalyzerData(lines, progress, cancellationToken);
             }
 
+            // DEBUG: test digitalni analyzy
+            if (SignalData.TryGetValue("CH1", out _)) {
+                var analyzer = new DigitalSignalAnalyzer(SignalData, "CH1");
+
+                var transitions = analyzer.DetectTransitions();
+                var segments = analyzer.GetConstantLevelSegments();
+
+                Console.WriteLine("--- Hrany:");
+                foreach (var t in transitions) {
+                    Console.WriteLine($"Hrana: {t.Time:F9}s, {t.From} → {t.To}");
+                }
+
+                Console.WriteLine("--- Segmenty:");
+                foreach (var s in segments) {
+                    Console.WriteLine($"Segment: {s.StartTime:F9}s – {s.EndTime:F9}s, hodnota: {s.Value}, délka: {s.Duration:F9}s");
+                }
+            }
+
             // Odstraneni prazdnych kanalu
             RemoveEmptyChannels();
         }
