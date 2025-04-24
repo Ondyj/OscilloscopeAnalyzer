@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Globalization;
+using OscilloscopeCLI.Protocols;
 
 namespace OscilloscopeCLI.Signal {
     public class SignalLoader {
@@ -32,26 +33,19 @@ namespace OscilloscopeCLI.Signal {
                 LoadLogicAnalyzerData(lines, progress, cancellationToken);
             }
 
-            // DEBUG: test digitalni analyzy
-            if (SignalData.TryGetValue("CH1", out _)) {
-                var analyzer = new DigitalSignalAnalyzer(SignalData, "CH1");
-
-                var transitions = analyzer.DetectTransitions();
-                var segments = analyzer.GetConstantLevelSegments();
-
-                Console.WriteLine("--- Hrany:");
-                foreach (var t in transitions) {
-                    Console.WriteLine($"Hrana: {t.Time:F9}s, {t.From} → {t.To}");
-                }
-
-                Console.WriteLine("--- Segmenty:");
-                foreach (var s in segments) {
-                    Console.WriteLine($"Segment: {s.StartTime:F9}s – {s.EndTime:F9}s, hodnota: {s.Value}, délka: {s.Duration:F9}s");
-                }
-            }
-
             // Odstraneni prazdnych kanalu
             RemoveEmptyChannels();
+
+            // DEBUG
+            var settings = new SpiSettings {
+                Cpol = false,
+                Cpha = false,
+                BitsPerWord = 8
+            };
+
+            var analyzer = new SpiProtocolAnalyzer(SignalData, settings);
+            analyzer.Analyze();
+            
         }
 
         /// <summary>
