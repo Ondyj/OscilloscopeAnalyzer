@@ -37,14 +37,14 @@ namespace OscilloscopeCLI.Signal {
             RemoveEmptyChannels();
 
             // DEBUG
-            var settings = new SpiSettings {
+            /*var settings = new SpiSettings {
                 Cpol = false,
                 Cpha = false,
                 BitsPerWord = 8
             };
 
             var analyzer = new SpiProtocolAnalyzer(SignalData, settings);
-            analyzer.Analyze();
+            analyzer.Analyze();*/
             
         }
 

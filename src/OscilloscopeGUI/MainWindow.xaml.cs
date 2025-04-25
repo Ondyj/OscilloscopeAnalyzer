@@ -13,6 +13,7 @@ using OscilloscopeGUI.Services;
 using OscilloscopeGUI.Services.Protocols;
 using System.Windows.Input;
 using System.Runtime.InteropServices;
+using System.Globalization;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
@@ -22,6 +23,7 @@ namespace OscilloscopeGUI {
         private SignalFileService fileService = new SignalFileService();
         private PlotNavigationService navService;
 
+        private SpiProtocolAnalyzer? spiAnalyzer;
         private bool isDragging = false;
         private Point lastMousePosition;
 
@@ -160,6 +162,39 @@ namespace OscilloscopeGUI {
             navService.HandleMouseWheel(e);
         }
 
+
+        private void SearchButton_Click(object sender, RoutedEventArgs e) {
+            string query = SearchBox.Text.Trim().ToLower();
+
+            if (string.IsNullOrEmpty(query)) {
+                MessageBox.Show("Zadejte hodnotu (např. FF)", "Vyhledávání", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!byte.TryParse(query, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte targetValue)) {
+                MessageBox.Show("Neplatný hexadecimální vstup. Zadejte např. 'A5'", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // analyzator se seznamem DecodedBytes
+            if (spiAnalyzer == null || spiAnalyzer.DecodedBytes.Count == 0) {
+                MessageBox.Show("SPI výsledky nejsou dostupné. Nejprve proveď analýzu.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var results = spiAnalyzer.DecodedBytes;
+
+            var match = results.FirstOrDefault(b =>
+                b.ValueMOSI == targetValue || b.ValueMISO == targetValue);
+
+            if (match != null) {
+                MessageBox.Show($"Hodnota 0x{targetValue:X2} nalezena v case {match.Timestamp:F6} s chybou: {match.Error ?? "žádná"}", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                // Volitelne: posun graf na match.Timestamp
+            } else {
+                MessageBox.Show($"Hodnota 0x{targetValue:X2} nebyla nalezena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
         /// <summary>
         /// Handler pro kliknuti na tlacitko "Analyzovat"
         /// </summary>
@@ -193,6 +228,17 @@ namespace OscilloscopeGUI {
                     break;
 
                 case "SPI":
+                    var spiSettings = new SpiSettings {
+                        Cpol = false, 
+                        Cpha = false,
+                        BitsPerWord = 8
+                    };
+
+                    spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings);
+                    spiAnalyzer.Analyze();
+
+                    MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                    break;
                 case "I2C":
                     MessageBox.Show($"{selectedProtocol} zatim neni implementovano.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;

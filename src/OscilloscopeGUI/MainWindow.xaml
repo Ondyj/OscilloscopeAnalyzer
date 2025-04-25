@@ -31,6 +31,11 @@
             <RadioButton x:Name="ManualRadio" Content="Ručně" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
             <Button Content="Analyzovat" Width="100" Click="AnalyzeButton_Click" Margin="5"/>
+
+            <!-- Vyhledavani v datech -->
+            <TextBlock Text="Hledat:" VerticalAlignment="Center" Margin="10,0,5,0"/>
+            <TextBox x:Name="SearchBox" Width="80" Margin="0,0,5,0" />
+            <Button Content="Vyhledat" Click="SearchButton_Click" Width="80" />
         </StackPanel>
 
         <!-- Graf (ScottPlot) zabira cele zbyvajici misto -->
