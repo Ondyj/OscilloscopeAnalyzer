@@ -43,6 +43,11 @@ namespace OscilloscopeCLI.Protocols {
         /// Vysledky jsou ulozeny v DecodedBytes a exportovany do CSV.
         /// </summary>
         public void Analyze() {
+            //AutoDetectSpiMode(); //TODO
+
+            // DEBUG: vypis detekovaneho SPI modu
+            //Console.WriteLine($"[DEBUG] SPI mod: CPOL={(settings.Cpol ? 1 : 0)}, CPHA={(settings.Cpha ? 1 : 0)}, BitsPerWord={settings.BitsPerWord}");
+
             DecodedBytes.Clear();
 
             var csAnalyzer = new DigitalSignalAnalyzer(signalData, "CH0");
@@ -59,57 +64,62 @@ namespace OscilloscopeCLI.Protocols {
                 .Where(seg => seg.Value == 0)
                 .ToList();
 
+            // na ktere hrane hodin se maji sbirat data
             var sclkEdges = sclkAnalyzer.DetectTransitions()
-                .Where(t => settings.Cpha ? t.From == 0 && t.To == 1 : t.From == 0 && t.To == 1)
-                .ToList();
+                .Where(t => {
+                    if (!settings.Cpha) {
+                        // CPHA = 0 → data se nacitaji na prvni hrane
+                        // pokud je CPOL = 1 → prvni hrana je sestupna (1 -> 0)
+                        // pokud je CPOL = 0 → prvni hrana je nabezna (0 -> 1)
+                        return settings.Cpol ? t.From == 1 && t.To == 0 : t.From == 0 && t.To == 1;
+                    } else {
+                        // CPHA = 1 → data se nacitaji na druhe hrane
+                        // pokud je CPOL = 1 → druha hrana je nabezna (0 -> 1)
+                        // pokud je CPOL = 0 → druha hrana je sestupna (1 -> 0)
+                        return settings.Cpol ? t.From == 0 && t.To == 1 : t.From == 1 && t.To == 0;
+                    }
+                }).ToList();
 
-            foreach (var transfer in activeTransfers) {
-                var bitsMosi = new List<bool>();
-                var bitsMiso = new List<bool>();
+                foreach (var transfer in activeTransfers) {
+                    var bitsMosi = new List<bool>();
+                    var bitsMiso = new List<bool>();
 
-                foreach (var edge in sclkEdges) {
-                    if (edge.Time < transfer.StartTime || edge.Time > transfer.EndTime)
-                        continue;
+                    var edgesInTransfer = sclkEdges.Where(e => e.Time >= transfer.StartTime && e.Time <= transfer.EndTime).ToList();
 
-                    bool bitMosi = GetBitAtTime(mosiAnalyzer.GetSamples(), edge.Time);
-                    bitsMosi.Add(bitMosi);
+                    foreach (var edge in edgesInTransfer) {
+                        bool bitMosi = GetBitAtTime(mosiAnalyzer.GetSamples(), edge.Time);
+                        bitsMosi.Add(bitMosi);
 
-                    if (hasMiso && misoAnalyzer != null) {
-                        bool bitMiso = GetBitAtTime(misoAnalyzer.GetSamples(), edge.Time);
-                        bitsMiso.Add(bitMiso);
+                        if (hasMiso && misoAnalyzer != null) {
+                            bool bitMiso = GetBitAtTime(misoAnalyzer.GetSamples(), edge.Time);
+                            bitsMiso.Add(bitMiso);
+                        }
+
+                        if (bitsMosi.Count == settings.BitsPerWord) {
+                            byte valueMosi = PackBits(bitsMosi);
+                            byte valueMiso = hasMiso && bitsMiso.Count == settings.BitsPerWord
+                                ? PackBits(bitsMiso)
+                                : (byte)0x00;
+
+                            DecodedBytes.Add(new SpiDecodedByte {
+                                Timestamp = edge.Time,
+                                ValueMOSI = valueMosi,
+                                ValueMISO = valueMiso,
+                                Error = null
+                            });
+
+                            bitsMosi.Clear();
+                            bitsMiso.Clear();
+                        }
                     }
 
-                    if (bitsMosi.Count == settings.BitsPerWord) {
-                        byte valueMosi = PackBits(bitsMosi);
-                        byte valueMiso = hasMiso && bitsMiso.Count == settings.BitsPerWord
-                            ? PackBits(bitsMiso)
-                            : (byte)0x00;
-
-                        DecodedBytes.Add(new SpiDecodedByte {
-                            Timestamp = edge.Time,
-                            ValueMOSI = valueMosi,
-                            ValueMISO = valueMiso,
-                            Error = null
-                        });
-
-                        bitsMosi.Clear();
-                        bitsMiso.Clear();
-                    }
+                    CheckShortTransfer(transfer.StartTime, transfer.EndTime, sclkEdges);
+                    CheckEdgeBitMismatch(transfer.EndTime, edgesInTransfer.Count, bitsMosi.Count);
+                    CheckInactiveLine(transfer.EndTime, bitsMosi, "MOSI");
+                    if (hasMiso) CheckInactiveLine(transfer.EndTime, bitsMiso, "MISO");
+                    CheckIncompleteByte(transfer.EndTime, bitsMosi, bitsMiso);
                 }
 
-                // Kontrola nekompletniho bajtu po skonceni prenosu
-                if (bitsMosi.Count > 0 && bitsMosi.Count < settings.BitsPerWord) {
-                    DecodedBytes.Add(new SpiDecodedByte {
-                        Timestamp = transfer.EndTime,
-                        ValueMOSI = PackBits(bitsMosi),
-                        ValueMISO = 0x00,
-                        Error = "Nedostatecny pocet bitu"
-                    });
-
-                    bitsMosi.Clear();
-                    bitsMiso.Clear();
-                }
-            }
 
             string outputDir = "Vysledky";
             Directory.CreateDirectory(outputDir);
@@ -145,6 +155,132 @@ namespace OscilloscopeCLI.Protocols {
             }
             return result;
         }
+
+        /// <summary>
+        /// Zkontroluje, zda prenos obsahuje alespon jednu hranu hodin.
+        /// Pokud ne, jedna se o prilis kratky prenos a je oznacen jako chybny.
+        /// </summary>
+        /// <param name="startTime">Cas zacatku prenosu (CS LOW)</param>
+        /// <param name="endTime">Cas konce prenosu (CS HIGH)</param>
+        /// <param name="sclkEdges">Seznam hran hodinoveho signalu SCLK</param>
+        private void CheckShortTransfer(double startTime, double endTime, List<DigitalTransition> sclkEdges) {
+            int clockEdgesInTransfer = sclkEdges.Count(e => e.Time >= startTime && e.Time <= endTime);
+            if (clockEdgesInTransfer < 1) {
+                DecodedBytes.Add(new SpiDecodedByte {
+                    Timestamp = endTime,
+                    ValueMOSI = 0,
+                    ValueMISO = 0,
+                    Error = "Prilis kratky prenos (CS LOW < 1 hrana)"
+                });
+            }
+        }
+
+        /// <summary>
+        /// Porovna pocet nactenych hran a ocekavanych bitu v jednom prenosu.
+        /// Pokud se hodnoty neshoduji, zaznamena chybu.
+        /// </summary>
+        /// <param name="endTime">Cas konce prenosu</param>
+        /// <param name="edgeCount">Pocet detekovanych hran v prenosu</param>
+        /// <param name="bitCount">Pocet skutecne nactenych bitu</param>
+        private void CheckEdgeBitMismatch(double endTime, int edgeCount, int bitCount) {
+            if (edgeCount != bitCount) {
+                DecodedBytes.Add(new SpiDecodedByte {
+                    Timestamp = endTime,
+                    ValueMOSI = 0,
+                    ValueMISO = 0,
+                    Error = $"Nesoulad poctu hran ({edgeCount}) a bitu ({bitCount})"
+                });
+            }
+        }
+
+        /// <summary>
+        /// Zkontroluje, zda behem prenosu byl signal na danem kanale konstantni (0 nebo 1).
+        /// To muze signalizovat chybu v zapojeni nebo komunikaci.
+        /// </summary>
+        /// <param name="endTime">Cas konce prenosu</param>
+        /// <param name="bits">Seznam hodnot na signalu behem prenosu</param>
+        /// <param name="lineName">Nazev signalu ("MOSI", "MISO")</param>
+        private void CheckInactiveLine(double endTime, List<bool> bits, string lineName) {
+            if (bits.Distinct().Count() == 1) {
+                DecodedBytes.Add(new SpiDecodedByte {
+                    Timestamp = endTime,
+                    ValueMOSI = 0,
+                    ValueMISO = 0,
+                    Error = $"{lineName} byl behem prenosu konstantni ({(bits[0] ? "1" : "0")})"
+                });
+            }
+        }
+
+        /// <summary>
+        /// Zkontroluje, zda behem prenosu doslo k nacteni nekompletniho bajtu.
+        /// Pokud neni dosazen pocet bitu podle nastaveni, zaznamena chybu.
+        /// </summary>
+        /// <param name="endTime">Cas konce prenosu</param>
+        /// <param name="bitsMosi">Seznam bitu z MOSI</param>
+        /// <param name="bitsMiso">Seznam bitu z MISO</param>
+        private void CheckIncompleteByte(double endTime, List<bool> bitsMosi, List<bool> bitsMiso) {
+            if (bitsMosi.Count > 0 && bitsMosi.Count < settings.BitsPerWord) {
+                DecodedBytes.Add(new SpiDecodedByte {
+                    Timestamp = endTime,
+                    ValueMOSI = PackBits(bitsMosi),
+                    ValueMISO = hasMiso ? PackBits(bitsMiso) : (byte)0x00,
+                    Error = "Nedostatecny pocet bitu"
+                });
+            }
+        }
+
+
+        /*public void AutoDetectSpiMode() {
+            var csAnalyzer = new DigitalSignalAnalyzer(signalData, "CH0");
+            var sclkAnalyzer = new DigitalSignalAnalyzer(signalData, "CH1");
+
+            var activeTransfers = csAnalyzer.GetConstantLevelSegments()
+                .Where(seg => seg.Value == 0)
+                .ToList();
+
+            var sclkEdges = sclkAnalyzer.DetectTransitions();
+
+            if (activeTransfers.Count == 0 || sclkEdges.Count == 0) {
+                Console.WriteLine("Neni dostatek dat pro detekci SPI modu.");
+                return;
+            }
+
+            // Prvni prenosovy ramec
+            var transfer = activeTransfers.First();
+            var edgesInTransfer = sclkEdges
+                .Where(e => e.Time >= transfer.StartTime && e.Time <= transfer.EndTime)
+                .ToList();
+
+            if (edgesInTransfer.Count == 0) {
+                Console.WriteLine("Nebyly detekovany zadne hranove prechody behem CS aktivniho stavu.");
+                return;
+            }
+
+            // Urci CPOL podle vychoziho stavu SCLK
+            var initialSclkLevel = sclkAnalyzer.GetSamples()
+                .FirstOrDefault(s => s.Timestamp >= transfer.StartTime)?.State ?? false;
+
+            // Prvni hrana v ramci aktivniho prenosu
+            var firstEdge = edgesInTransfer.First();
+
+            // Pokud hrana je 0->1 a zacinali jsme v 0, tak CPOL = 0 (inicialni stav = 0)
+            // Pokud hrana je 1->0 a zacinali jsme v 1, tak CPOL = 1
+            if (initialSclkLevel == false && firstEdge.From == 0 && firstEdge.To == 1) {
+                settings.Cpol = false;
+                settings.Cpha = false;
+            } else if (initialSclkLevel == true && firstEdge.From == 1 && firstEdge.To == 0) {
+                settings.Cpol = true;
+                settings.Cpha = false;
+            } else {
+                // Alternativni vysvetleni: data se cist az na druhou hranu
+                settings.Cpha = true;
+
+                // Predpoklad: CPOL se odvozuje od vychoziho stavu hodin
+                settings.Cpol = initialSclkLevel;
+            }
+
+            Console.WriteLine($"Detekovany SPI mod: CPOL={(settings.Cpol ? 1 : 0)}, CPHA={(settings.Cpha ? 1 : 0)}");
+        }*/
 
         /// <summary>
         /// Exportuje vysledky SPI analyzy do CSV souboru. Vystup obsahuje timestamp, MOSI, volitelne MISO, ASCII reprezentaci a chybu.
