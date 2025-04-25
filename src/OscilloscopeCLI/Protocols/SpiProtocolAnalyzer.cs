@@ -302,7 +302,7 @@ namespace OscilloscopeCLI.Protocols {
                     : $"\\x{b.ValueMOSI:X2}";
                 string error = b.Error ?? "";
 
-                if (hasMiso && b.ValueMISO > 0) {
+                if (hasMiso) {
                     string misoHex = $"0x{b.ValueMISO:X2}";
                     writer.WriteLine($"{timestamp};{mosiHex};{misoHex};{asciiChar};{error}");
                 } else {
