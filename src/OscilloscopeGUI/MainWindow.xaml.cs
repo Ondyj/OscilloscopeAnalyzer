@@ -14,6 +14,7 @@ using OscilloscopeGUI.Services.Protocols;
 using System.Windows.Input;
 using System.Runtime.InteropServices;
 using System.Globalization;
+using System.Windows.Media;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
@@ -366,6 +367,20 @@ namespace OscilloscopeGUI {
 
             plot.Plot.Clear();
             plot.Refresh();
+        }
+
+        private void SearchBox_GotFocus(object sender, RoutedEventArgs e) {
+            if (SearchBox.Text == "např. FF") {
+                SearchBox.Text = "";
+                SearchBox.Foreground = new SolidColorBrush(System.Windows.Media.Colors.Black);
+            }
+        }
+
+        private void SearchBox_LostFocus(object sender, RoutedEventArgs e) {
+            if (string.IsNullOrWhiteSpace(SearchBox.Text)) {
+                SearchBox.Text = "např. FF";
+                SearchBox.Foreground = new SolidColorBrush(System.Windows.Media.Colors.Gray);
+            }
         }
     }
 }
