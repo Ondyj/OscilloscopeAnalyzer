@@ -295,7 +295,7 @@ namespace OscilloscopeCLI.Protocols {
                 writer.WriteLine("Timestamp [s];MOSI (hex);ASCII;Error");
 
             foreach (var b in DecodedBytes) {
-                string timestamp = b.Timestamp.ToString("F6", CultureInfo.InvariantCulture);
+                string timestamp = b.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
                 string mosiHex = $"0x{b.ValueMOSI:X2}";
                 string asciiChar = (b.ValueMOSI >= 32 && b.ValueMOSI <= 126)
                     ? ((char)b.ValueMOSI).ToString()

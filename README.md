@@ -6,6 +6,31 @@
 - **Klik kolečkem** - resetuje zobrazení na výchozí stav
 - **Držení levého tlačítka myši + tažení** – horizontální posun grafu (alternativa klavesy **A** / **D**)
 
+## Analýza protokolů
+- Podpora analýzy protokolů SPI (TODO UART a I2C).
+- Možnost automatické detekce parametrů nebo ručního zadání přes jednoduchý dialog.
+- **U každého protokolu probíhá:**
+```bash
+Detekce rámců
+Detekce chyb (např. špatný počet bitů, parita)
+Export výsledků do CSV souboru
+```
+
+## Vyhledávání a navigace
+- Umožňuje **vyhledávat konkrétní hodnoty** (např. FF, A5, 0A) po provedené analýze.
+- **Výsledek zobrazuje:**
+```bash
+Čas výskytu (timestamp)
+Hodnotu v hexadecimálním formátu
+ASCII reprezentaci (pokud je čitelná)
+Případné chyby detekované během přenosu
+```
+- **Navigace mezi výsledky:**
+```bash
+Pomocí tlačítek ← a →
+Nebo přímo klávesami ← a → na klávesnici
+
+```
 ## Spustitelná verze
 Spustitelný soubor je dostupný ve formě ZIP archivu:
 

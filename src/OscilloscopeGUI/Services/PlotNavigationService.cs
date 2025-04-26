@@ -8,6 +8,8 @@ namespace OscilloscopeGUI.Services {
     /// </summary>
     public class PlotNavigationService {
         private readonly WpfPlot plot;
+        private AxisLimits? baseLimits = null;
+        private bool isZoomedIn = false;
 
         public PlotNavigationService(WpfPlot plotControl) {
             plot = plotControl;
@@ -68,9 +70,18 @@ namespace OscilloscopeGUI.Services {
         /// Resetuje pohled na graf do vychoziho stavu (jako po AutoScale)
         /// </summary>
         public void ResetView() {
+            Console.WriteLine("ResetView.");
+
             plot.Plot.Axes.AutoScale();
             plot.Refresh();
+
+            // Ulozime vychozi limity pro dalsi vyhledavani
+            baseLimits = plot.Plot.Axes.GetLimits();
+            isZoomedIn = false; // A taky resetujeme priznak zoomu
+
+            Console.WriteLine(isZoomedIn);
         }
+
 
         /// <summary>
         /// Posune graf horizontálně podle rozdilu souradnic X v pixelech
@@ -91,6 +102,27 @@ namespace OscilloscopeGUI.Services {
             xAxis.Max -= deltaUnits;
 
             plot.Refresh();
+        }
+        public void CenterOn(double xValue) {
+            var plt = plot.Plot;
+
+            // Pokud nemame ulozene vychozi limity, vezmeme aktualni
+            var limits = baseLimits ?? plt.Axes.GetLimits();
+
+            double originalXMin = limits.XRange.Min;
+            double originalXMax = limits.XRange.Max;
+
+            if (isZoomedIn)
+                return;
+
+            double range = (originalXMax - originalXMin) / 500; // priblizeni, muzes zvetsit nebo zmensit
+            double newXMin = xValue - range / 2;
+            double newXMax = xValue + range / 2;
+
+            plt.Axes.SetLimitsX(newXMin, newXMax);
+            plot.Refresh();
+
+            isZoomedIn = true;
         }
     }
 }

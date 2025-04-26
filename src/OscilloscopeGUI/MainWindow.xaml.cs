@@ -27,6 +27,11 @@ namespace OscilloscopeGUI {
         private bool isDragging = false;
         private Point lastMousePosition;
 
+        private List<SpiDecodedByte> matches = new();
+        private int currentMatchIndex = 0;
+        private byte? searchedValue = null; // ulozena hledana hodnota
+
+
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool AllocConsole();
@@ -89,6 +94,8 @@ namespace OscilloscopeGUI {
                 return; // uzivatel zrusil vyber
             }
 
+            ResetState(); // vymaze se stav
+
             // vytvoreni progressbaru
             var progressDialog = new ProgressDialog();
             progressDialog.Show();
@@ -146,20 +153,49 @@ namespace OscilloscopeGUI {
         /// </summary>
         private async Task PlotSignalGraphAsync() {
             await plotter.PlotSignalsAsync(loader.SignalData); // SignalPlotter
+            navService.ResetView();
         }
 
         /// <summary>
         /// Obsluha klavesovych vstupu pro ovladani zoomu
         /// </summary>
-        private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e) {
+        private void MainWindow_KeyDown(object sender, KeyEventArgs e) {
+            if (matches.Count > 0) {
+                if (e.Key == Key.Left) {
+                    PrevResult_Click(sender, e);
+                    e.Handled = true; // zakazani jakekoliv funkce sipky
+                    return;
+                }
+                if (e.Key == Key.Right) {
+                    NextResult_Click(sender, e);
+                    e.Handled = true; // zakazani jakekoliv funkce sipky
+                    return;
+                }
+            }
+
+            if (e.Key == Key.Up || e.Key == Key.Down) {
+                // zakazani sipky nahoru a dolu
+                e.Handled = true;
+                return;
+            }
+
+            // normalne ovladame zoom
             navService.HandleKey(e.Key);
         }
+
 
         /// <summary>
         /// Obsluha pohybu kolecka mysi pro zoom
         /// </summary>
         private void MainWindow_MouseWheel(object sender, MouseWheelEventArgs e){
             navService.HandleMouseWheel(e);
+        }
+
+        private void SearchBox_KeyDown(object sender, KeyEventArgs e) {
+            if (e.Key == Key.Enter) {
+                SearchButton_Click(sender, e);
+                plot.Focus();
+            }
         }
 
 
@@ -176,23 +212,72 @@ namespace OscilloscopeGUI {
                 return;
             }
 
-            // analyzator se seznamem DecodedBytes
             if (spiAnalyzer == null || spiAnalyzer.DecodedBytes.Count == 0) {
-                MessageBox.Show("SPI výsledky nejsou dostupné. Nejprve proveď analýzu.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Výsledky nejsou dostupné. Nejprve proveď analýzu.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            var results = spiAnalyzer.DecodedBytes;
+            searchedValue = targetValue; // ulozeni hledane hodnoty
 
-            var match = results.FirstOrDefault(b =>
-                b.ValueMOSI == targetValue || b.ValueMISO == targetValue);
+            matches = spiAnalyzer.DecodedBytes
+                .Where(b => b.ValueMOSI == searchedValue)
+                .ToList();
 
-            if (match != null) {
-                MessageBox.Show($"Hodnota 0x{targetValue:X2} nalezena v case {match.Timestamp:F6} s chybou: {match.Error ?? "žádná"}", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
-                // Volitelne: posun graf na match.Timestamp
+            if (matches.Count > 0) {
+                currentMatchIndex = 0;
+                ShowMatch();
+                ResultNavigationPanel.Visibility = Visibility.Visible;
             } else {
                 MessageBox.Show($"Hodnota 0x{targetValue:X2} nebyla nalezena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                ResultNavigationPanel.Visibility = Visibility.Collapsed;
             }
+        }
+        private void ShowMatch() {
+            if (matches.Count == 0) return;
+
+            var match = matches[currentMatchIndex];
+
+            string asciiChar = (match.ValueMOSI >= 32 && match.ValueMOSI <= 126) 
+                ? ((char)match.ValueMOSI).ToString() 
+                : $"\\x{match.ValueMOSI:X2}";
+
+            string error = match.Error ?? "žádný";
+            string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
+
+            ResultInfo.Text = $"Time: {timestamp}s | ASCII: {asciiChar} | Error: {error}";
+
+            // Priblizeni na nalezeny bod
+            navService.CenterOn(match.Timestamp);
+        }
+
+        private void NextResult_Click(object sender, RoutedEventArgs e) {
+            if (searchedValue == null || spiAnalyzer == null) return;
+
+            if (matches.Count == 0) {
+                matches = spiAnalyzer.DecodedBytes
+                    .Where(b => b.ValueMOSI == searchedValue || b.ValueMISO == searchedValue)
+                    .ToList();
+                if (matches.Count == 0) return;
+                currentMatchIndex = 0;
+            }
+
+            currentMatchIndex = (currentMatchIndex + 1) % matches.Count;
+            ShowMatch();
+        }
+
+        private void PrevResult_Click(object sender, RoutedEventArgs e) {
+            if (searchedValue == null || spiAnalyzer == null) return;
+
+            if (matches.Count == 0) {
+                matches = spiAnalyzer.DecodedBytes
+                    .Where(b => b.ValueMOSI == searchedValue || b.ValueMISO == searchedValue)
+                    .ToList();
+                if (matches.Count == 0) return;
+                currentMatchIndex = 0;
+            }
+
+            currentMatchIndex = (currentMatchIndex - 1 + matches.Count) % matches.Count;
+            ShowMatch();
         }
 
         /// <summary>
@@ -228,16 +313,27 @@ namespace OscilloscopeGUI {
                     break;
 
                 case "SPI":
-                    var spiSettings = new SpiSettings {
-                        Cpol = false, 
-                        Cpha = false,
-                        BitsPerWord = 8
-                    };
+                    if (isManual) {
+                        var dialog = new SpiSettingsDialog();
+                        bool? confirmed = dialog.ShowDialog();
 
-                    spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings);
-                    spiAnalyzer.Analyze();
+                        if (confirmed == true) {
+                            var settings = dialog.Settings;
+                            spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, settings);
+                            spiAnalyzer.Analyze();
+                            MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                    } else {
+                        var spiSettings = new SpiSettings {
+                            Cpol = false,
+                            Cpha = false,
+                            BitsPerWord = 8
+                        };
 
-                    MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                        spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings);
+                        spiAnalyzer.Analyze();
+                        MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
                     break;
                 case "I2C":
                     MessageBox.Show($"{selectedProtocol} zatim neni implementovano.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -247,6 +343,22 @@ namespace OscilloscopeGUI {
                     MessageBox.Show("Neni vybran platny protokol.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
                     break;
             }
+        }
+
+        private void ResetState() {
+            if (spiAnalyzer != null) {
+                spiAnalyzer.DecodedBytes.Clear();
+                spiAnalyzer = null;
+            }
+
+            ResultNavigationPanel.Visibility = Visibility.Collapsed;
+            ResultInfo.Text = "";
+            matches.Clear();
+            searchedValue = null;
+            currentMatchIndex = 0;
+
+            plot.Plot.Clear();
+            plot.Refresh();
         }
     }
 }

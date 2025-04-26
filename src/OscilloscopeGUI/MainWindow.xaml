@@ -12,6 +12,7 @@
         <!-- Definice radku pro tlacitka a zbytek okna pro graf -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Tlacitka -->
+            <RowDefinition Height="Auto"/> <!-- Vyhledavani vysledku -->
             <RowDefinition Height="*"/>    <!-- Graf zabira cely zbytek okna -->
         </Grid.RowDefinitions>
 
@@ -34,12 +35,20 @@
 
             <!-- Vyhledavani v datech -->
             <TextBlock Text="Hledat:" VerticalAlignment="Center" Margin="10,0,5,0"/>
-            <TextBox x:Name="SearchBox" Width="80" Margin="0,0,5,0" />
+            <TextBox x:Name="SearchBox" Width="80" Margin="0,0,5,0" KeyDown="SearchBox_KeyDown" />
             <Button Content="Vyhledat" Click="SearchButton_Click" Width="80" />
         </StackPanel>
 
+        <!-- Vyhledavani v datech -->
+        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="10"
+                    VerticalAlignment="Center" HorizontalAlignment="Left" Visibility="Collapsed" x:Name="ResultNavigationPanel">
+            <Button Content="←" Width="40" Click="PrevResult_Click" Margin="5,0"/>
+            <Button Content="→" Width="40" Click="NextResult_Click" Margin="5,0"/>
+            <TextBlock x:Name="ResultInfo" Text="Výsledek" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="Bold"/>
+        </StackPanel>
+
         <!-- Graf (ScottPlot) zabira cele zbyvajici misto -->
-        <ScottPlot:WpfPlot Name="plot" Grid.Row="1" Margin="10"
+        <ScottPlot:WpfPlot Name="plot" Grid.Row="2" Margin="10"
                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
     </Grid>
 

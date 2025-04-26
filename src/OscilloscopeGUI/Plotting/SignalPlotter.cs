@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using OscilloscopeGUI.Services;
 using ScottPlot;
 using ScottPlot.WPF;
 
@@ -11,6 +12,7 @@ namespace OscilloscopeGUI.Plotting {
     /// </summary>
     public class SignalPlotter {
         private readonly WpfPlot plot;
+        private readonly PlotNavigationService navService;
 
         /// <summary>
         /// Konstruktor prijimajici ovladaci prvek WpfPlot
@@ -18,6 +20,7 @@ namespace OscilloscopeGUI.Plotting {
         /// <param name="plotControl">Instance grafu, do ktereho se bude vykreslovat</param>
         public SignalPlotter(WpfPlot plotControl) {
             plot = plotControl;
+            navService = new PlotNavigationService(plotControl);
         }
 
         /// <summary>
@@ -58,9 +61,8 @@ namespace OscilloscopeGUI.Plotting {
                         offset -= (maxValue - minValue) + 2 * spacing;
                     }
 
-                    plot.Plot.Axes.AutoScale(); // Automaticke meritko os
                     plot.Plot.ShowLegend();     // Zobrazeni legendy
-                    plot.Refresh();             // Aktualizace zobrazeni
+                    
                 });
             });
         }
