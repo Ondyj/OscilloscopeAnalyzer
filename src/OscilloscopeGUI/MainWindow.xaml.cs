@@ -174,6 +174,7 @@ namespace OscilloscopeGUI {
             }
 
             if (e.Key == Key.Up || e.Key == Key.Down) {
+                navService.HandleKey(e.Key);
                 // zakazani sipky nahoru a dolu
                 e.Handled = true;
                 return;
@@ -246,8 +247,14 @@ namespace OscilloscopeGUI {
 
             ResultInfo.Text = $"Time: {timestamp}s | ASCII: {asciiChar} | Error: {error}";
 
-            // Priblizeni na nalezeny bod
-            navService.CenterOn(match.Timestamp);
+
+            if (currentMatchIndex == 0) {
+                // posune i priblizi
+                navService.CenterOn(match.Timestamp);
+            } else {
+                // pouze posune
+                navService.MoveTo(match.Timestamp);
+            }
         }
 
         private void NextResult_Click(object sender, RoutedEventArgs e) {

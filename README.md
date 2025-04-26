@@ -2,9 +2,10 @@
 
 ## Ovládání grafu (vizualizace signálu)
 
-- **Kolečko myši** – přiblížení / oddálení (alternativa klavesy **W** / **S**)
+- **Kolečko myši** – přiblížení / oddálení (alternativa klavesy **W** / **S** nebo **↑** / **↓**)
 - **Klik kolečkem** - resetuje zobrazení na výchozí stav
 - **Držení levého tlačítka myši + tažení** – horizontální posun grafu (alternativa klavesy **A** / **D**)
+- **Klavesy ← a →** - přesun na předchozí / následující nalezenou hodnotu při vyhledávání
 
 ## Analýza protokolů
 - Podpora analýzy protokolů SPI (TODO UART a I2C).

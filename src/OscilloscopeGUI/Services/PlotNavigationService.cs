@@ -15,8 +15,9 @@ namespace OscilloscopeGUI.Services {
             plot = plotControl;
         }
 
-        /// <summary>
-        /// Zpracuje klavesovou udalost pro zoomovani a posun
+        // <summary>
+        /// Zpracuje klavesovou udalost pro zoomovani a posun.
+        /// W nebo Sipka nahoru = priblizeni, S nebo Sipka dolu = oddaleni, A = posun doleva, D = posun doprava.
         /// </summary>
         public void HandleKey(Key key) {
             var xAxis = plot.Plot.Axes.Bottom;
@@ -31,12 +32,12 @@ namespace OscilloscopeGUI.Services {
             double minY = yAxis.Min;
             double maxY = yAxis.Max;
 
-            if (key == Key.W) {
-                // Klavesa W = zoom in (priblizeni)
+            if (key == Key.W || key == Key.Up) {
+                // Klavesa W nebo sipka nahoru = zoom in (priblizeni)
                 xAxis.Min += shiftX;
                 xAxis.Max -= shiftX;
-            } else if (key == Key.S) {
-                // Klavesa S = zoom out (oddaleni)
+            } else if (key == Key.S || key == Key.Down) {
+                // Klavesa S nebo sipka dolu = zoom out (oddaleni)
                 xAxis.Min -= shiftX;
                 xAxis.Max += shiftX;
             } else if (key == Key.A) {
@@ -103,10 +104,13 @@ namespace OscilloscopeGUI.Services {
 
             plot.Refresh();
         }
+        /// <summary>
+        /// Priblizi graf na dane X souradnici a nastavi ji do stredu obrazovky.
+        /// </summary>
         public void CenterOn(double xValue) {
             var plt = plot.Plot;
 
-            // Pokud nemame ulozene vychozi limity, vezmeme aktualni
+            // Pokud nejsou ulozene vychozi limity, vezmeme aktualni
             var limits = baseLimits ?? plt.Axes.GetLimits();
 
             double originalXMin = limits.XRange.Min;
@@ -115,7 +119,7 @@ namespace OscilloscopeGUI.Services {
             if (isZoomedIn)
                 return;
 
-            double range = (originalXMax - originalXMin) / 500; // priblizeni, muzes zvetsit nebo zmensit
+            double range = (originalXMax - originalXMin) / 1000000; // priblizeni 500
             double newXMin = xValue - range / 2;
             double newXMax = xValue + range / 2;
 
@@ -124,5 +128,21 @@ namespace OscilloscopeGUI.Services {
 
             isZoomedIn = true;
         }
+
+        /// <summary>
+        /// Plynule posune graf tak, aby xValue bylo ve stredu grafu (beze zmeny zoomu)
+        /// </summary>
+        public void MoveTo(double xCenter) {
+            var xAxis = plot.Plot.Axes.Bottom;
+
+            double rangeX = xAxis.Max - xAxis.Min;
+            double halfRange = rangeX / 2;
+
+            xAxis.Min = xCenter - halfRange;
+            xAxis.Max = xCenter + halfRange;
+
+            plot.Refresh();
+        }
+
     }
 }
