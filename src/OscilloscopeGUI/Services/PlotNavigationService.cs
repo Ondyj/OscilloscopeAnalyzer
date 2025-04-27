@@ -115,11 +115,21 @@ namespace OscilloscopeGUI.Services {
 
             double originalXMin = limits.XRange.Min;
             double originalXMax = limits.XRange.Max;
+            double originalRange = originalXMax - originalXMin;
 
             if (isZoomedIn)
                 return;
 
-            double range = (originalXMax - originalXMin) / 1000000; // priblizeni 500
+            // Dynamicky urceni rozsahu priblizeni podle velikosti puvodniho rozsahu
+            double zoomFactor;
+            if (originalRange < 10)
+                zoomFactor = 10000; // mene priblizit kdyz je signal maly
+            else if (originalRange < 20)
+                zoomFactor = 1000000; // stredni priblizeni
+            else
+                zoomFactor = 1000000; // velky signal = hodne priblizit
+
+            double range = originalRange / zoomFactor;
             double newXMin = xValue - range / 2;
             double newXMax = xValue + range / 2;
 
