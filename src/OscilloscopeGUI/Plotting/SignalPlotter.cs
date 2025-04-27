@@ -48,8 +48,9 @@ namespace OscilloscopeGUI.Plotting {
 
                         // Vykresleni signalu do grafu
                         //var signal = plot.Plot.Add.Signal(adjustedVoltages);
-                        var signal = plot.Plot.Add.Scatter(times, adjustedVoltages);
-                          signal.MarkerSize = 0;
+                        //var signal = plot.Plot.Add.Scatter(times, adjustedVoltages);
+                        var signal = plot.Plot.Add.SignalXY(times, adjustedVoltages);
+                        signal.MarkerSize = 0;
                         signal.LegendText = channelName;
 
                         // Vykresleni ohranicujicich car pro lepsi oddeleni
