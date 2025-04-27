@@ -24,8 +24,6 @@
             <ComboBoxItem Content="Žádná"/>
             <ComboBoxItem Content="Sudá"/>
             <ComboBoxItem Content="Lichá"/>
-            <ComboBoxItem Content="Vždy 0"/>
-            <ComboBoxItem Content="Vždy 1"/>
         </ComboBox>
 
         <TextBlock Text="Počet stop bitů:" Margin="0,5,0,2"/>

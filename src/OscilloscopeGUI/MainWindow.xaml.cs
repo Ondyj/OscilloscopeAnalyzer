@@ -351,7 +351,18 @@ namespace OscilloscopeGUI {
 
                             if (confirmed == true) {
                                 var settings = dialog.Settings;
-                                // TODO: analyzuj signal pomoci settings
+
+                                Console.WriteLine($"[DEBUG] Používá se UART nastavení:");
+                                Console.WriteLine($"        BaudRate = {settings.BaudRate}");
+                                Console.WriteLine($"        DataBits = {settings.DataBits}");
+                                Console.WriteLine($"        Parity = {settings.Parity}");
+                                Console.WriteLine($"        StopBits = {settings.StopBits}");
+                                Console.WriteLine($"        IdleLevelHigh = {settings.IdleLevelHigh}");
+
+                                uartAnalyzer = new UartProtocolAnalyzer(loader.SignalData, settings);
+                                uartAnalyzer.Analyze();
+
+                                MessageBox.Show("UART analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
                                 lastAnalyzedProtocol = "UART";
                             }
                         } else {
@@ -364,13 +375,13 @@ namespace OscilloscopeGUI {
                                 IdleLevelHigh = true
                             };
 
-                            // Nacteni kanalu CH0 pro UART
-                            if (!loader.SignalData.TryGetValue("CH0", out var rawSamples)) {
-                                MessageBox.Show("Nenalezen signal CH0 pro UART analyzu.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
-                                return;
-                            }
+                            Console.WriteLine($"[DEBUG] Používá se výchozí UART nastavení:");
+                            Console.WriteLine($"        BaudRate = {uartSettings.BaudRate}");
+                            Console.WriteLine($"        DataBits = {uartSettings.DataBits}");
+                            Console.WriteLine($"        Parity = {uartSettings.Parity}");
+                            Console.WriteLine($"        StopBits = {uartSettings.StopBits}");
+                            Console.WriteLine($"        IdleLevelHigh = {uartSettings.IdleLevelHigh}");
 
-                            // Spusteni analyzy
                             uartAnalyzer = new UartProtocolAnalyzer(loader.SignalData, uartSettings);
                             uartAnalyzer.Analyze();
 
@@ -386,6 +397,7 @@ namespace OscilloscopeGUI {
 
                         if (confirmed == true) {
                             var settings = dialog.Settings;
+                            Console.WriteLine($"[DEBUG] Používá se SPI nastavení: CPOL={(settings.Cpol ? 1 : 0)}, CPHA={(settings.Cpha ? 1 : 0)}, BitsPerWord={settings.BitsPerWord}");
                             spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, settings);
                             spiAnalyzer.Analyze();
                             MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -397,6 +409,7 @@ namespace OscilloscopeGUI {
                             Cpha = false,
                             BitsPerWord = 8
                         };
+                        Console.WriteLine($"[DEBUG] Používá se výchozí SPI nastavení: CPOL={(spiSettings.Cpol ? 1 : 0)}, CPHA={(spiSettings.Cpha ? 1 : 0)}, BitsPerWord={spiSettings.BitsPerWord}");
 
                         spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings);
                         spiAnalyzer.Analyze();
