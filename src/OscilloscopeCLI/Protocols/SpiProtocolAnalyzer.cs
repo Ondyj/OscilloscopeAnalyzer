@@ -119,13 +119,6 @@ namespace OscilloscopeCLI.Protocols {
                     if (hasMiso) CheckInactiveLine(transfer.EndTime, bitsMiso, "MISO");
                     CheckIncompleteByte(transfer.EndTime, bitsMosi, bitsMiso);
                 }
-
-
-            string outputDir = "Vysledky";
-            Directory.CreateDirectory(outputDir);
-            string outputPath = Path.Combine(outputDir, "spi.csv");
-
-            ExportResults(outputPath);
         }
 
         /// <summary>

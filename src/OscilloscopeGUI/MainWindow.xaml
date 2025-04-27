@@ -18,7 +18,7 @@
 
         <!-- Tlacitka nahore -->
         <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="10">
-            <Button Content="Načíst CSV" Width="120" Click="LoadCsv_Click" Margin="5"/>
+            <Button Content="Načíst CSV" Width="120" Click="LoadCsv_Click" Margin="5,0"/>
 
             <!-- Novy protokolovy vyber -->
             <TextBlock Text="Protokol:" VerticalAlignment="Center" Margin="20,0,5,0"/>
@@ -31,7 +31,7 @@
             <RadioButton x:Name="AutoDetectRadio" Content="Auto" IsChecked="True" VerticalAlignment="Center" Margin="0,0,5,0"/>
             <RadioButton x:Name="ManualRadio" Content="Ručně" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
-            <Button Content="Analyzovat" Width="100" Click="AnalyzeButton_Click" Margin="5"/>
+            <Button Content="Analyzovat" Width="100" Click="AnalyzeButton_Click" Margin="5,0"/>
 
             <!-- Vyhledavani v datech -->
             <TextBlock Text="Hledat:" VerticalAlignment="Center" Margin="10,0,5,0"/>
@@ -41,6 +41,8 @@
                 GotFocus="SearchBox_GotFocus"
                 LostFocus="SearchBox_LostFocus" />
             <Button Content="Vyhledat" Click="SearchButton_Click" Width="80" />
+
+              <Button Content="Exportovat výsledky" Width="140" Click="ExportResultsButton_Click" Margin="5,0"/>
         </StackPanel>
 
         <!-- Vyhledavani v datech -->

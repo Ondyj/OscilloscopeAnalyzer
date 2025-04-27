@@ -15,6 +15,7 @@ using System.Windows.Input;
 using System.Runtime.InteropServices;
 using System.Globalization;
 using System.Windows.Media;
+using System.IO;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
@@ -25,6 +26,7 @@ namespace OscilloscopeGUI {
         private PlotNavigationService navService;
 
         private SpiProtocolAnalyzer? spiAnalyzer;
+        private string? lastAnalyzedProtocol = null;
         private bool isDragging = false;
         private Point lastMousePosition;
 
@@ -313,10 +315,12 @@ namespace OscilloscopeGUI {
                             var settings = dialog.Settings;
                             result = uartService.AnalyzeWithSettings(loader.SignalData, settings);
                             MessageBox.Show(result, "Vystup UART", MessageBoxButton.OK, MessageBoxImage.Information);
+                            lastAnalyzedProtocol = "UART";
                         }
                     } else {
                         result = uartService.AnalyzeAuto(loader.SignalData);
                         MessageBox.Show(result, "Vystup UART", MessageBoxButton.OK, MessageBoxImage.Information);
+                        lastAnalyzedProtocol = "UART";
                     }
                     break;
 
@@ -330,6 +334,7 @@ namespace OscilloscopeGUI {
                             spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, settings);
                             spiAnalyzer.Analyze();
                             MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                            lastAnalyzedProtocol = "SPI";
                         }
                     } else {
                         var spiSettings = new SpiSettings {
@@ -341,10 +346,12 @@ namespace OscilloscopeGUI {
                         spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings);
                         spiAnalyzer.Analyze();
                         MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                        lastAnalyzedProtocol = "SPI";
                     }
                     break;
                 case "I2C":
                     MessageBox.Show($"{selectedProtocol} zatim neni implementovano.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                    lastAnalyzedProtocol = "I2C";
                     break;
 
                 default:
@@ -353,12 +360,65 @@ namespace OscilloscopeGUI {
             }
         }
 
+        private void ExportResultsButton_Click(object sender, RoutedEventArgs e) {
+            if (string.IsNullOrEmpty(lastAnalyzedProtocol)) {
+                MessageBox.Show("Nebyl proveden žádný exportovatelný protokol.", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string outputDir = "Vysledky";
+            Directory.CreateDirectory(outputDir);
+            string outputPath = "";
+
+            switch (lastAnalyzedProtocol) {
+                /*case "UART":
+                    outputPath = System.IO.Path.Combine(outputDir, "uart.csv");
+                    uartService.ExportResults(outputPath);
+                    MessageBox.Show($"Výsledky UART byly exportovány do:\n{outputPath}", "Export dokončen", MessageBoxButton.OK, MessageBoxImage.Information);
+                    break;*/
+
+                case "SPI":
+                    if (spiAnalyzer != null) {
+                        outputPath = GetUniqueFilePath(outputDir, "spi.csv");
+                        spiAnalyzer.ExportResults(outputPath);
+                        MessageBox.Show($"Výsledky SPI byly exportovány do:\n{outputPath}", "Export dokončen", MessageBoxButton.OK, MessageBoxImage.Information);
+                    } else {
+                        MessageBox.Show("Není k dispozici žádná data SPI k exportu.", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                    break;
+
+                /*case "I2C":
+                    MessageBox.Show("Export výsledků pro I2C zatím není implementován.", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    break;*/
+
+                default:
+                    MessageBox.Show("Neznámý typ protokolu pro export.", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    break;
+            }
+        }
+
+        private string GetUniqueFilePath(string directory, string baseFileName) {
+            string baseNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(baseFileName);
+            string extension = System.IO.Path.GetExtension(baseFileName);
+
+            string path = System.IO.Path.Combine(directory, baseFileName);
+            int counter = 2;
+
+            while (System.IO.File.Exists(path)) {
+                path = System.IO.Path.Combine(directory, $"{baseNameWithoutExtension}_{counter}{extension}");
+                counter++;
+            }
+
+            return path;
+        }
+
         private void ResetState() {
             if (spiAnalyzer != null) {
                 spiAnalyzer.DecodedBytes.Clear();
                 spiAnalyzer = null;
             }
 
+            lastAnalyzedProtocol = null;
             ResultNavigationPanel.Visibility = Visibility.Collapsed;
             ResultInfo.Text = "";
             matches.Clear();
