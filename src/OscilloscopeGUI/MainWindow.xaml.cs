@@ -25,12 +25,14 @@ namespace OscilloscopeGUI {
 
         private SpiProtocolAnalyzer? spiAnalyzer;
         private UartProtocolAnalyzer? uartAnalyzer;
+        private I2cProtocolAnalyzer? i2cAnalyzer;
         private string? lastAnalyzedProtocol = null;
         private bool isDragging = false;
         private Point lastMousePosition;
 
         private List<SpiDecodedByte> spiMatches = new();
         private List<UartDecodedByte> uartMatches = new();
+        private List<I2cDecodedPacket> i2cMatches = new();
         private int currentMatchIndex = 0;
         private byte? searchedValue = null; // ulozena hledana hodnota
 
@@ -240,13 +242,19 @@ namespace OscilloscopeGUI {
                     .Where(b => b.Value == searchedValue)
                     .ToList();
             } 
+            else if (lastAnalyzedProtocol == "I2C" && i2cAnalyzer != null) {
+                i2cMatches = i2cAnalyzer.DecodedPackets
+                    .Where(p => p.Data.Any(d => d == searchedValue))
+                    .ToList();
+            }
             else {
                 MessageBox.Show("Vysledky nejsou dostupne. Nejprve provedte analyzu.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             bool hasMatches = (lastAnalyzedProtocol == "SPI" && spiMatches.Count > 0)
-                        || (lastAnalyzedProtocol == "UART" && uartMatches.Count > 0);
+                            || (lastAnalyzedProtocol == "UART" && uartMatches.Count > 0)
+                            || (lastAnalyzedProtocol == "I2C" && i2cMatches.Count > 0);
 
             if (hasMatches) {
                 currentMatchIndex = 0;
@@ -286,8 +294,7 @@ namespace OscilloscopeGUI {
                 } else {
                     navService.MoveTo(match.Timestamp);
                 }
-            }
-            else if (lastAnalyzedProtocol == "UART" && uartMatches.Count > 0) {
+            } else if (lastAnalyzedProtocol == "UART" && uartMatches.Count > 0) {
                 var match = uartMatches[currentMatchIndex];
 
                 string asciiChar = (match.Value >= 32 && match.Value <= 126)
@@ -306,6 +313,15 @@ namespace OscilloscopeGUI {
                 } else {
                     navService.MoveTo(match.Timestamp);
                 }
+            } else if (lastAnalyzedProtocol == "I2C" && i2cMatches.Count > 0) {
+                var match = i2cMatches[currentMatchIndex];
+                //TODO
+
+                if (currentMatchIndex == 0) {
+                    navService.CenterOn(match.StartTimestamp);
+                } else {
+                    navService.MoveTo(match.StartTimestamp);
+                }
             }
         }
 
@@ -313,7 +329,10 @@ namespace OscilloscopeGUI {
         private void NextResult_Click(object sender, RoutedEventArgs e) {
             if (searchedValue == null) return;
 
-            int count = lastAnalyzedProtocol == "SPI" ? spiMatches.Count : uartMatches.Count;
+            int count = lastAnalyzedProtocol == "SPI" ? spiMatches.Count :
+             lastAnalyzedProtocol == "UART" ? uartMatches.Count :
+             lastAnalyzedProtocol == "I2C" ? i2cMatches.Count :
+             0;
             if (count == 0) return;
 
             currentMatchIndex = (currentMatchIndex + 1) % count;
@@ -323,7 +342,10 @@ namespace OscilloscopeGUI {
         private void PrevResult_Click(object sender, RoutedEventArgs e) {
             if (searchedValue == null) return;
 
-            int count = lastAnalyzedProtocol == "SPI" ? spiMatches.Count : uartMatches.Count;
+            int count = lastAnalyzedProtocol == "SPI" ? spiMatches.Count :
+             lastAnalyzedProtocol == "UART" ? uartMatches.Count :
+             lastAnalyzedProtocol == "I2C" ? i2cMatches.Count :
+             0;
             if (count == 0) return;
 
             currentMatchIndex = (currentMatchIndex - 1 + count) % count;
@@ -341,6 +363,12 @@ namespace OscilloscopeGUI {
 
             string selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "";
             bool isManual = ManualRadio.IsChecked == true;
+                int channelCount = loader.SignalData.Count;
+
+                // kontrola poctu kanalu
+                if (!CheckChannelCount(selectedProtocol, channelCount)) {
+                    return;
+                }
 
             switch (selectedProtocol) {
                     case "UART":
@@ -388,44 +416,76 @@ namespace OscilloscopeGUI {
                             MessageBox.Show("UART analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
                             lastAnalyzedProtocol = "UART";
                         }
-                        break;
+                    break;
 
-                case "SPI":
-                    if (isManual) {
-                        var dialog = new SpiSettingsDialog();
-                        bool? confirmed = dialog.ShowDialog();
+                    case "SPI":
+                        if (isManual) {
+                            var dialog = new SpiSettingsDialog();
+                            bool? confirmed = dialog.ShowDialog();
 
-                        if (confirmed == true) {
-                            var settings = dialog.Settings;
-                            Console.WriteLine($"[DEBUG] Používá se SPI nastavení: CPOL={(settings.Cpol ? 1 : 0)}, CPHA={(settings.Cpha ? 1 : 0)}, BitsPerWord={settings.BitsPerWord}");
-                            spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, settings);
+                            if (confirmed == true) {
+                                var settings = dialog.Settings;
+                                Console.WriteLine($"[DEBUG] Používá se SPI nastavení: CPOL={(settings.Cpol ? 1 : 0)}, CPHA={(settings.Cpha ? 1 : 0)}, BitsPerWord={settings.BitsPerWord}");
+                                spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, settings);
+                                spiAnalyzer.Analyze();
+                                MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                                lastAnalyzedProtocol = "SPI";
+                            }
+                        } else {
+                            var spiSettings = new SpiSettings {
+                                Cpol = false,
+                                Cpha = false,
+                                BitsPerWord = 8
+                            };
+                            Console.WriteLine($"[DEBUG] Používá se výchozí SPI nastavení: CPOL={(spiSettings.Cpol ? 1 : 0)}, CPHA={(spiSettings.Cpha ? 1 : 0)}, BitsPerWord={spiSettings.BitsPerWord}");
+
+                            spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings);
                             spiAnalyzer.Analyze();
                             MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
                             lastAnalyzedProtocol = "SPI";
                         }
-                    } else {
-                        var spiSettings = new SpiSettings {
-                            Cpol = false,
-                            Cpha = false,
-                            BitsPerWord = 8
-                        };
-                        Console.WriteLine($"[DEBUG] Používá se výchozí SPI nastavení: CPOL={(spiSettings.Cpol ? 1 : 0)}, CPHA={(spiSettings.Cpha ? 1 : 0)}, BitsPerWord={spiSettings.BitsPerWord}");
-
-                        spiAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings);
-                        spiAnalyzer.Analyze();
-                        MessageBox.Show("SPI analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
-                        lastAnalyzedProtocol = "SPI";
-                    }
                     break;
-                case "I2C":
-                    MessageBox.Show($"{selectedProtocol} zatim neni implementovano.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-                    lastAnalyzedProtocol = "I2C";
+
+                    case "I2C":
+                        try {
+                            i2cAnalyzer = new I2cProtocolAnalyzer(loader.SignalData);
+                            i2cAnalyzer.Analyze();
+
+                            Console.WriteLine($"[DEBUG] I2C analýza dokončena.");
+                            // TODO
+                            lastAnalyzedProtocol = "I2C";
+                        }
+                        catch (Exception ex) {
+                            MessageBox.Show($"Chyba při I2C analýze: {ex.Message}", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                            Console.WriteLine($"[ERROR] Chyba I2C analýzy: {ex}");
+                        }
                     break;
 
                 default:
                     MessageBox.Show("Neni vybran platny protokol.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
                     break;
             }
+        }
+
+        private bool CheckChannelCount(string protocol, int channelCount) {
+            int requiredChannels = protocol switch {
+                "UART" => 1,
+                "SPI" => 3,
+                "I2C" => 2,
+                _ => 0
+            };
+
+            if (requiredChannels == 0) {
+                return true;
+            }
+
+            if (channelCount < requiredChannels) {
+                MessageBox.Show($"Pro analyzu {protocol} je potreba alespon {requiredChannels} kanaly.", 
+                    "Nedostatecny pocet kanalu", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            return true;
         }
 
         private void ExportResultsButton_Click(object sender, RoutedEventArgs e) {
