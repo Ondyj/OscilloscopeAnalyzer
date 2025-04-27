@@ -36,16 +36,17 @@ namespace OscilloscopeCLI.Signal {
             // Odstraneni prazdnych kanalu
             RemoveEmptyChannels();
 
-            // DEBUG
-            /*var settings = new SpiSettings {
-                Cpol = false,
-                Cpha = false,
-                BitsPerWord = 8
-            };
-
-            var analyzer = new SpiProtocolAnalyzer(SignalData, settings);
-            analyzer.Analyze();*/
-            
+        // --- DEBUG: Výpis prvních 10 vzorků ---
+            Console.WriteLine("[DEBUG] Ukázka načtených dat:");
+            foreach (var channel in SignalData) {
+                Console.WriteLine($"Kanál {channel.Key}:");
+                var samples = channel.Value;
+                for (int i = 0; i < Math.Min(10, samples.Count); i++) {
+                    var sample = samples[i];
+                    Console.WriteLine($"  {i + 1}. Čas: {sample.Item1:F9}s, Hodnota: {sample.Item2}");
+                }
+            }
+            Console.WriteLine("[DEBUG] --- konec výpisu ---");
         }
 
         /// <summary>

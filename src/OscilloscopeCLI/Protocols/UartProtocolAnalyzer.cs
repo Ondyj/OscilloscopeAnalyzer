@@ -1,145 +1,215 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
+using OscilloscopeCLI.Protocols;
 using OscilloscopeCLI.Signal;
 
 namespace OscilloscopeCLI.Protocols {
+
     public class UartSettings : IProtocolSettings {
         public string ProtocolName => "UART";
-        public double BaudRate { get; set; }
-        public int DataBits { get; set; } = 8;
-        public bool ParityEnabled { get; set; } = false;
-        public bool ParityEven { get; set; } = true;
-        public int StopBits { get; set; } = 1;
-        public bool IdleHigh { get; set; } = false;
+        public int BaudRate { get; set; }
+        public int DataBits { get; set; }
+        public Parity Parity { get; set; } // None, Even, Odd
+        public int StopBits { get; set; }
+        public bool IdleLevelHigh { get; set; } // true = idle 1, false = idle 0
+    }
+
+    public enum Parity {
+        None,
+        Even,
+        Odd
+    }
+    public class UartDecodedByte {
+        public double Timestamp { get; set; }
+        public string? Channel { get; set; }
+        public byte Value { get; set; }
+        public string? Error { get; set; }
     }
     public class UartProtocolAnalyzer : IProtocolAnalyzer {
+        private Dictionary<string, List<SignalSample>> channelSamples;
+        private readonly UartSettings settings;
+
+        public List<UartDecodedByte> DecodedBytes { get; private set; } = new();
+
         public string ProtocolName => "UART";
 
-        private List<(double Timestamp, byte ByteValue)> _decodedBytes = new();
-        private List<(double Timestamp, string Error)> _errors = new();
+        public UartProtocolAnalyzer(Dictionary<string, List<Tuple<double, double>>> signalData, UartSettings settings) {
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.channelSamples = new Dictionary<string, List<SignalSample>>();
 
-        public void Analyze(List<SignalSample> samples, IProtocolSettings settings) {
-            _decodedBytes.Clear();
-            _errors.Clear();
-
-            // Osetreni typu nastaveni
-            if (settings is not UartSettings uartSettings) {
-                _errors.Add((0, "Neplatne nastaveni UART."));
-                return;
+            foreach (var kvp in signalData) {
+                var samples = new List<SignalSample>();
+                foreach (var (timestamp, value) in kvp.Value) {
+                    samples.Add(new SignalSample(timestamp, value != 0));
+                }
+                channelSamples[kvp.Key] = samples;
             }
+        }
 
-            if (samples == null || samples.Count == 0 || uartSettings.BaudRate <= 0) {
-                _errors.Add((0, "Neplatne vstupni parametry nebo nulovy baud rate."));
+        /// <summary>
+        /// Analyzuje vsechny dostupne kanaly
+        /// </summary>
+        public void Analyze() {
+            double bitTime = CalculateBitTime();
+            Console.WriteLine($"[DEBUG] bitTime = {bitTime * 1_000_000:F4} mikrosekund");
+
+            DecodedBytes.Clear();
+            if (channelSamples.Count == 0)
                 return;
-            }
 
-            double bitDuration = 1.0 / uartSettings.BaudRate;
+            bool idleLevel = settings.IdleLevelHigh;
+            Console.WriteLine($"[DEBUG] IdleLevelHigh = {(idleLevel ? "1" : "0")}");
 
-            for (int i = 0; i < samples.Count - 10; i++) {
-                bool level = uartSettings.IdleHigh;
-                bool startDetected = samples[i].State != level && samples[i + 1].Timestamp - samples[i].Timestamp > bitDuration / 2;
+            foreach (var kvp in channelSamples) {
+                string channelName = kvp.Key;
+                var samples = kvp.Value;
 
-                if (startDetected) {
-                    double startTime = samples[i].Timestamp;
-                    byte value = 0;
+                Console.WriteLine($"[DEBUG] Analyzuji kanal: {channelName}");
 
-                    // Cteni datovych bitu
-                    for (int bit = 0; bit < uartSettings.DataBits; bit++) {
-                        double sampleTime = startTime + (bit + 1) * bitDuration;
-                        bool bitValue = GetBitAtTime(samples, sampleTime);
-                        if (uartSettings.IdleHigh) bitValue = !bitValue;
+                int i = 1;
+                while (i < samples.Count) {
+                    var previous = samples[i - 1];
+                    var current = samples[i];
 
-                        if (bitValue)
-                            value |= (byte)(1 << bit); // LSB first
-                    }
+                    bool fromIdle = previous.State == idleLevel;
+                    bool toActive = current.State != idleLevel;
 
-                    int parityOffset = uartSettings.DataBits + 1;
+                    if (fromIdle && toActive) {
+                        double startTime = current.Timestamp;
+                        Console.WriteLine($"[DEBUG] {channelName} - Start bit v case {startTime:F9} sekund.");
 
-                    // Kontrola parity pokud je aktivni
-                    if (uartSettings.ParityEnabled) {
-                        double parityTime = startTime + parityOffset * bitDuration;
-                        bool parityBit = GetBitAtTime(samples, parityTime);
-                        if (uartSettings.IdleHigh) parityBit = !parityBit;
+                        byte value = 0;
 
-                        int oneBits = 0;
-                        for (int b = 0; b < uartSettings.DataBits; b++)
-                            if ((value & (1 << b)) != 0) oneBits++;
+                        // Cteme datove bity
+                        for (int bitIndex = 0; bitIndex < settings.DataBits; bitIndex++) {
+                            double sampleTime = startTime + ((bitIndex + 1.5) * bitTime);
+                            bool bit = GetBitAtTime(samples, sampleTime);
 
-                        bool expectedParity = uartSettings.ParityEven ? (oneBits % 2 == 0) : (oneBits % 2 != 0);
-                        if (parityBit != expectedParity) {
-                            _errors.Add((startTime, "Chybna parita"));
-                            continue;
+                            if (bit)
+                                value |= (byte)(1 << bitIndex);
+
+                            Console.WriteLine($"[DEBUG] {channelName} - bitIndex: {bitIndex}, sampleTime: {sampleTime:F9}, bit: {(bit ? 1 : 0)}");
                         }
-                    }
 
-                    // Kontrola stop bitu
-                    int stopStart = uartSettings.DataBits + 1 + (uartSettings.ParityEnabled ? 1 : 0);
-                    bool validStop = true;
-                    for (int sb = 0; sb < uartSettings.StopBits; sb++) {
-                        double stopTime = startTime + (stopStart + sb) * bitDuration;
-                        bool stopBit = GetBitAtTime(samples, stopTime);
-                        if (uartSettings.IdleHigh) stopBit = !stopBit;
-                        if (!stopBit) validStop = false;
-                    }
+                        string? error = null;
 
-                    if (!validStop) {
-                        _errors.Add((startTime, "Chybny stop bit"));
+                        // Parita
+                        if (settings.Parity != Parity.None) {
+                            double parityTime = startTime + ((settings.DataBits + 1.5) * bitTime);
+                            bool parityBit = GetBitAtTime(samples, parityTime);
+
+                            bool calculatedParity = CalculateParity(value);
+
+                            if (settings.Parity == Parity.Even && calculatedParity != parityBit)
+                                error = "Chyba paritniho bitu (ocekavana suda parita)";
+                            if (settings.Parity == Parity.Odd && calculatedParity == parityBit)
+                                error = "Chyba paritniho bitu (ocekavana licha parita)";
+
+                            Console.WriteLine($"[DEBUG] {channelName} - parityBit: {(parityBit ? 1 : 0)}, calculatedParity: {(calculatedParity ? 1 : 0)}, error: {error}");
+                        }
+
+                        // Stop bit
+                        double stopBitTime = startTime + ((settings.DataBits + (settings.Parity != Parity.None ? 1 : 0) + settings.StopBits) * bitTime);
+                        bool stopBitOk = GetBitAtTime(samples, stopBitTime) == idleLevel;
+
+                        if (!stopBitOk) {
+                            error = (error != null ? error + " + " : "") + "Chyba stop bitu";
+                            Console.WriteLine($"[DEBUG] {channelName} - Chyba stop bitu v case {stopBitTime:F9}");
+                        }
+
+                        // Ulozime vysledek
+                        DecodedBytes.Add(new UartDecodedByte {
+                            Timestamp = startTime,
+                            Channel = channelName,
+                            Value = value,
+                            Error = error
+                        });
+
+                        Console.WriteLine($"[DEBUG] {channelName} - Dekodovany byte: 0x{value:X2} na case {startTime:F9} {(error != null ? "[CHYBA]" : "[OK]")}");
+
+                        // Posun za konec prenosu
+                        while (i < samples.Count && samples[i].Timestamp < stopBitTime)
+                            i++;
+
                         continue;
                     }
 
-                    _decodedBytes.Add((startTime, value));
-                    double frameEndTime = startTime + (stopStart + uartSettings.StopBits) * bitDuration;
-                    i = FindIndexAfterTime(samples, frameEndTime);
+                    i++;
                 }
             }
         }
 
         /// <summary>
-        /// Exportuje dekodovana data a chyby do CSV souboru.
+        /// Spocita paritu (even parity) pro dany byte.
+        /// Vraci true, pokud je pocet jednicek lichy, jinak false (sudy).
         /// </summary>
+        private bool CalculateParity(byte value) {
+            int ones = 0;
+            for (int i = 0; i < 8; i++)
+            {
+                if ((value & (1 << i)) != 0)
+                    ones++;
+            }
+            return (ones % 2) != 0; // true = lichy pocet
+        }
+
+        /// <summary>
+        /// Najde hodnotu signalu v danem case - vraci stav pred nejblizsim vzorkem se stejnym nebo vetsim casem.
+        /// Pokud cas presahuje vsechny vzorky, vraci stav posledniho vzorku.
+        /// </summary>
+        private bool GetBitAtTime(List<SignalSample> samples, double timestamp) {
+            for (int i = 1; i < samples.Count; i++)
+            {
+                if (samples[i].Timestamp >= timestamp)
+                    return samples[i - 1].State;
+            }
+            return samples[^1].State;
+        }
+
+        /// <summary>
+        /// Vypocita dobu trvani jednoho bitu v sekundach podle baudrate.
+        /// </summary>
+        private double CalculateBitTime() {
+            if (settings == null)
+                throw new InvalidOperationException("Settings nejsou inicializovany.");
+
+            if (settings.BaudRate <= 0)
+                throw new ArgumentException("BaudRate musi byt vetsi nez 0.");
+
+            return 1.0 / settings.BaudRate;
+        }
+
+        /// <summary>
+        /// Spocita pocet nastavenych bitu (1) v bytu.
+        /// </summary>
+        private int CountBitsSet(byte b) {
+            int count = 0;
+            while (b != 0) {
+                count += b & 1;
+                b >>= 1;
+            }
+            return count;
+        }
+
         public void ExportResults(string outputPath) {
             using var writer = new StreamWriter(outputPath);
 
-            writer.WriteLine("Timestamp [s];Byte (hex);ASCII;Error");
+            // hlavicka CSV
+            writer.WriteLine("Timestamp [s];Channel;Byte (hex);ASCII;Error");
 
-            int i = 0, j = 0;
+            foreach (var b in DecodedBytes)
+            {
+                string timestamp = b.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
+                string channel = b.Channel ?? "Unknown"; // kdyz tam nemame, tak defaultne Unknown
+                string hex = $"0x{b.Value:X2}";
+                string asciiChar = (b.Value >= 32 && b.Value <= 126) ? ((char)b.Value).ToString() : $"\\x{b.Value:X2}";
+                string error = b.Error ?? "";
 
-            while (i < _decodedBytes.Count || j < _errors.Count) {
-                bool writeByte = i < _decodedBytes.Count &&
-                                 (j >= _errors.Count || _decodedBytes[i].Timestamp < _errors[j].Timestamp);
-
-                if (writeByte) {
-                    var (ts, value) = _decodedBytes[i++];
-                    writer.WriteLine($"{ts.ToString("F6", CultureInfo.InvariantCulture)};0x{value:X2};{(char)value};");
-                } else {
-                    var (ts, err) = _errors[j++];
-                    writer.WriteLine($"{ts.ToString("F6", CultureInfo.InvariantCulture)};;;{err}");
-                }
+                writer.WriteLine($"{timestamp};{channel};{hex};{asciiChar};{error}");
             }
-        }
 
-        /// <summary>
-        /// Vrati hodnotu bitu v danem case. Vyhleda nejblizsi vzorek.
-        /// </summary>
-        private bool GetBitAtTime(List<SignalSample> samples, double time) {
-            for (int i = 1; i < samples.Count; i++) {
-                if (samples[i].Timestamp >= time)
-                    return samples[i - 1].State;
-            }
-            return samples[^1].State; // fallback
-        }
-
-        /// <summary>
-        /// Najde index vzorku, ktery je prvni za danym casem.
-        /// </summary>
-        private int FindIndexAfterTime(List<SignalSample> samples, double time) {
-            for (int i = 0; i < samples.Count; i++) {
-                if (samples[i].Timestamp > time)
-                    return i;
-            }
-            return samples.Count - 1;
+            Console.WriteLine($"[DEBUG] Vysledky UART byly exportovany do: {outputPath}");
         }
     }
 }

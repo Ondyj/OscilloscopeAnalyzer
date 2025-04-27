@@ -10,7 +10,6 @@ using System.Windows.Controls;
 using OscilloscopeCLI.Protocols;
 using OscilloscopeGUI.Plotting;
 using OscilloscopeGUI.Services;
-using OscilloscopeGUI.Services.Protocols;
 using System.Windows.Input;
 using System.Runtime.InteropServices;
 using System.Globalization;
@@ -21,16 +20,17 @@ namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
         private SignalLoader loader = new SignalLoader(); // Ulozeni dat do tridy
         private SignalPlotter plotter;
-        private UartAnalysisService uartService = new UartAnalysisService();
         private SignalFileService fileService = new SignalFileService();
         private PlotNavigationService navService;
 
         private SpiProtocolAnalyzer? spiAnalyzer;
+        private UartProtocolAnalyzer? uartAnalyzer;
         private string? lastAnalyzedProtocol = null;
         private bool isDragging = false;
         private Point lastMousePosition;
 
-        private List<SpiDecodedByte> matches = new();
+        private List<SpiDecodedByte> spiMatches = new();
+        private List<UartDecodedByte> uartMatches = new();
         private int currentMatchIndex = 0;
         private byte? searchedValue = null; // ulozena hledana hodnota
 
@@ -163,7 +163,10 @@ namespace OscilloscopeGUI {
         /// Obsluha klavesovych vstupu pro ovladani zoomu
         /// </summary>
         private void MainWindow_KeyDown(object sender, KeyEventArgs e) {
-            if (matches.Count > 0) {
+            bool hasMatches = (lastAnalyzedProtocol == "SPI" && spiMatches.Count > 0)
+                        || (lastAnalyzedProtocol == "UART" && uartMatches.Count > 0);
+
+            if (hasMatches) {
                 if (e.Key == Key.Left) {
                     PrevResult_Click(sender, e);
                     e.Handled = true; // zakazani jakekoliv funkce sipky
@@ -178,13 +181,11 @@ namespace OscilloscopeGUI {
 
             if (e.Key == Key.Up || e.Key == Key.Down) {
                 navService.HandleKey(e.Key);
-                // zakazani sipky nahoru a dolu
                 e.Handled = true;
                 return;
             }
 
-            // normalne ovladame zoom
-            navService.HandleKey(e.Key);
+            navService.HandleKey(e.Key); // normalni zoom
         }
 
 
@@ -207,86 +208,105 @@ namespace OscilloscopeGUI {
             string query = SearchBox.Text.Trim().ToLower();
 
             if (string.IsNullOrEmpty(query)) {
-                MessageBox.Show("Zadejte hodnotu (např. FF)", "Vyhledávání", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Zadejte hodnotu (napr. FF)", "Vyhledavani", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             if (!byte.TryParse(query, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte targetValue)) {
-                MessageBox.Show("Neplatný hexadecimální vstup. Zadejte např. 'A5'", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Neplatny hexadecimalni vstup. Zadejte napr. 'A5'", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
-            if (spiAnalyzer == null || spiAnalyzer.DecodedBytes.Count == 0) {
-                MessageBox.Show("Výsledky nejsou dostupné. Nejprve proveď analýzu.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+            searchedValue = targetValue; // ulozime hledanou hodnotu
+            spiMatches.Clear();
+            uartMatches.Clear();
+
+            if (lastAnalyzedProtocol == "SPI" && spiAnalyzer != null) {
+                spiMatches = spiAnalyzer.DecodedBytes
+                    .Where(b => b.ValueMOSI == searchedValue || b.ValueMISO == searchedValue)
+                    .ToList();
+            } 
+            else if (lastAnalyzedProtocol == "UART" && uartAnalyzer != null) {
+                uartMatches = uartAnalyzer.DecodedBytes
+                    .Where(b => b.Value == searchedValue)
+                    .ToList();
+            } 
+            else {
+                MessageBox.Show("Vysledky nejsou dostupne. Nejprve provedte analyzu.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            searchedValue = targetValue; // ulozeni hledane hodnoty
+            bool hasMatches = (lastAnalyzedProtocol == "SPI" && spiMatches.Count > 0)
+                        || (lastAnalyzedProtocol == "UART" && uartMatches.Count > 0);
 
-            matches = spiAnalyzer.DecodedBytes
-                .Where(b => b.ValueMOSI == searchedValue)
-                .ToList();
-
-            if (matches.Count > 0) {
+            if (hasMatches) {
                 currentMatchIndex = 0;
                 ShowMatch();
                 ResultNavigationPanel.Visibility = Visibility.Visible;
             } else {
-                MessageBox.Show($"Hodnota 0x{targetValue:X2} nebyla nalezena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show($"Hodnota 0x{targetValue:X2} nebyla nalezena.", "Vysledek", MessageBoxButton.OK, MessageBoxImage.Information);
                 ResultNavigationPanel.Visibility = Visibility.Collapsed;
             }
         }
+
+
         private void ShowMatch() {
-            if (matches.Count == 0) return;
+            if (lastAnalyzedProtocol == "SPI" && spiMatches.Count > 0) {
+                var match = spiMatches[currentMatchIndex];
 
-            var match = matches[currentMatchIndex];
+                string asciiChar = (match.ValueMOSI >= 32 && match.ValueMOSI <= 126)
+                    ? ((char)match.ValueMOSI).ToString()
+                    : $"\\x{match.ValueMOSI:X2}";
 
-            string asciiChar = (match.ValueMOSI >= 32 && match.ValueMOSI <= 126) 
-                ? ((char)match.ValueMOSI).ToString() 
-                : $"\\x{match.ValueMOSI:X2}";
+                string error = match.Error ?? "zadny";
+                string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
 
-            string error = match.Error ?? "žádný";
-            string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
+                ResultInfo.Text = $"Time: {timestamp}s | ASCII: {asciiChar} | Error: {error}";
 
-            ResultInfo.Text = $"Time: {timestamp}s | ASCII: {asciiChar} | Error: {error}";
+                if (currentMatchIndex == 0) {
+                    navService.CenterOn(match.Timestamp);
+                } else {
+                    navService.MoveTo(match.Timestamp);
+                }
+            }
+            else if (lastAnalyzedProtocol == "UART" && uartMatches.Count > 0) {
+                var match = uartMatches[currentMatchIndex];
 
+                string asciiChar = (match.Value >= 32 && match.Value <= 126)
+                    ? ((char)match.Value).ToString()
+                    : $"\\x{match.Value:X2}";
 
-            if (currentMatchIndex == 0) {
-                // posune i priblizi
-                navService.CenterOn(match.Timestamp);
-            } else {
-                // pouze posune
-                navService.MoveTo(match.Timestamp);
+                string error = match.Error ?? "zadny";
+                string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
+
+                ResultInfo.Text = $"Time: {timestamp}s | ASCII: {asciiChar} | Error: {error}";
+
+                if (currentMatchIndex == 0) {
+                    navService.CenterOn(match.Timestamp);
+                } else {
+                    navService.MoveTo(match.Timestamp);
+                }
             }
         }
 
+
         private void NextResult_Click(object sender, RoutedEventArgs e) {
-            if (searchedValue == null || spiAnalyzer == null) return;
+            if (searchedValue == null) return;
 
-            if (matches.Count == 0) {
-                matches = spiAnalyzer.DecodedBytes
-                    .Where(b => b.ValueMOSI == searchedValue || b.ValueMISO == searchedValue)
-                    .ToList();
-                if (matches.Count == 0) return;
-                currentMatchIndex = 0;
-            }
+            int count = lastAnalyzedProtocol == "SPI" ? spiMatches.Count : uartMatches.Count;
+            if (count == 0) return;
 
-            currentMatchIndex = (currentMatchIndex + 1) % matches.Count;
+            currentMatchIndex = (currentMatchIndex + 1) % count;
             ShowMatch();
         }
 
         private void PrevResult_Click(object sender, RoutedEventArgs e) {
-            if (searchedValue == null || spiAnalyzer == null) return;
+            if (searchedValue == null) return;
 
-            if (matches.Count == 0) {
-                matches = spiAnalyzer.DecodedBytes
-                    .Where(b => b.ValueMOSI == searchedValue || b.ValueMISO == searchedValue)
-                    .ToList();
-                if (matches.Count == 0) return;
-                currentMatchIndex = 0;
-            }
+            int count = lastAnalyzedProtocol == "SPI" ? spiMatches.Count : uartMatches.Count;
+            if (count == 0) return;
 
-            currentMatchIndex = (currentMatchIndex - 1 + matches.Count) % matches.Count;
+            currentMatchIndex = (currentMatchIndex - 1 + count) % count;
             ShowMatch();
         }
 
@@ -302,27 +322,42 @@ namespace OscilloscopeGUI {
             string selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "";
             bool isManual = ManualRadio.IsChecked == true;
 
-            string result;
-
             switch (selectedProtocol) {
-                case "UART":
-                    if (isManual) {
-                        // Otevreni dialogu pro rucni zadani nastaveni UART
-                        var dialog = new UartSettingsDialog();
-                        bool? confirmed = dialog.ShowDialog();
+                    case "UART":
+                        if (isManual) {
+                            // Otevreni dialogu pro rucni zadani nastaveni UART
+                            var dialog = new UartSettingsDialog();
+                            bool? confirmed = dialog.ShowDialog();
 
-                        if (confirmed == true) {
-                            var settings = dialog.Settings;
-                            result = uartService.AnalyzeWithSettings(loader.SignalData, settings);
-                            MessageBox.Show(result, "Vystup UART", MessageBoxButton.OK, MessageBoxImage.Information);
+                            if (confirmed == true) {
+                                var settings = dialog.Settings;
+                                // TODO: analyzuj signal pomoci settings
+                                lastAnalyzedProtocol = "UART";
+                            }
+                        } else {
+                            // Nastaveni vychozich parametru pro UART
+                            var uartSettings = new UartSettings {
+                                BaudRate = 115200,
+                                DataBits = 8,
+                                Parity = Parity.None,
+                                StopBits = 1,
+                                IdleLevelHigh = true
+                            };
+
+                            // Nacteni kanalu CH0 pro UART
+                            if (!loader.SignalData.TryGetValue("CH0", out var rawSamples)) {
+                                MessageBox.Show("Nenalezen signal CH0 pro UART analyzu.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+                                return;
+                            }
+
+                            // Spusteni analyzy
+                            uartAnalyzer = new UartProtocolAnalyzer(loader.SignalData, uartSettings);
+                            uartAnalyzer.Analyze();
+
+                            MessageBox.Show("UART analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
                             lastAnalyzedProtocol = "UART";
                         }
-                    } else {
-                        result = uartService.AnalyzeAuto(loader.SignalData);
-                        MessageBox.Show(result, "Vystup UART", MessageBoxButton.OK, MessageBoxImage.Information);
-                        lastAnalyzedProtocol = "UART";
-                    }
-                    break;
+                        break;
 
                 case "SPI":
                     if (isManual) {
@@ -371,11 +406,15 @@ namespace OscilloscopeGUI {
             string outputPath = "";
 
             switch (lastAnalyzedProtocol) {
-                /*case "UART":
-                    outputPath = System.IO.Path.Combine(outputDir, "uart.csv");
-                    uartService.ExportResults(outputPath);
-                    MessageBox.Show($"Výsledky UART byly exportovány do:\n{outputPath}", "Export dokončen", MessageBoxButton.OK, MessageBoxImage.Information);
-                    break;*/
+                case "UART":
+                    if (uartAnalyzer != null) {
+                        outputPath = GetUniqueFilePath(outputDir, "uart.csv");
+                        uartAnalyzer.ExportResults(outputPath);
+                        MessageBox.Show($"Výsledky UART byly exportovány do:\n{outputPath}", "Export dokončen", MessageBoxButton.OK, MessageBoxImage.Information);
+                    } else {
+                        MessageBox.Show("Není k dispozici žádná data UART k exportu.", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                    break;
 
                 case "SPI":
                     if (spiAnalyzer != null) {
@@ -418,16 +457,23 @@ namespace OscilloscopeGUI {
                 spiAnalyzer = null;
             }
 
+            if (uartAnalyzer != null) {
+                uartAnalyzer.DecodedBytes.Clear();
+                uartAnalyzer = null;
+            }
+
             lastAnalyzedProtocol = null;
             ResultNavigationPanel.Visibility = Visibility.Collapsed;
             ResultInfo.Text = "";
-            matches.Clear();
+            spiMatches.Clear();
+            uartMatches.Clear();
             searchedValue = null;
             currentMatchIndex = 0;
 
             plot.Plot.Clear();
             plot.Refresh();
         }
+
 
         private void SearchBox_GotFocus(object sender, RoutedEventArgs e) {
             if (SearchBox.Text == "např. FF") {
