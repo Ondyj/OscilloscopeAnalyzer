@@ -32,11 +32,6 @@ namespace OscilloscopeCLI.Protocols {
             this.settings = settings;
         }
 
-        public void Analyze(List<SignalSample> samples, IProtocolSettings settings) {
-            throw new NotImplementedException("SPI analyza vyzaduje SCLK, CS, MOSI, MISO.");
-        }
-
-
         /// <summary>
         /// Provede SPI analyzu nad digitalnimi signaly SCLK, CS, MOSI a volitelne MISO.
         /// Detekuje aktivni prenosy, sbira bity na hranach hodin a dekoduje bajty.
