@@ -10,15 +10,19 @@ namespace OscilloscopeGUI {
         }
 
         private void OkButton_Click(object sender, RoutedEventArgs e) {
-            // Zpracovani hodnot
-            int.TryParse(BitsPerWordBox.Text, out var bits);
-            int.TryParse(CpolBox.Text, out var cpol);
-            int.TryParse(CphaBox.Text, out var cpha);
+            int bitsPerWord = 8;
+            if (!int.TryParse(BitsPerWordBox.Text.Trim(), out bitsPerWord) || bitsPerWord <= 0) {
+                bitsPerWord = 8; 
+            }
 
-            // Nastaveni hodnot
-            Settings.BitsPerWord = bits > 0 ? bits : 8;
-            Settings.Cpol = cpol == 1;
-            Settings.Cpha = cpha == 1;
+            bool cpol = CpolBox.SelectedIndex == 1; // 0 = neinvertovane, 1 = invertovane
+            bool cpha = CphaBox.SelectedIndex == 1; // 0 = 1. hrana, 1 = 2. hrana
+
+            Settings = new SpiSettings {
+                BitsPerWord = bitsPerWord,
+                Cpol = cpol,
+                Cpha = cpha
+            };
 
             DialogResult = true;
             Close();
