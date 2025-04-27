@@ -222,11 +222,20 @@ namespace OscilloscopeGUI {
             uartMatches.Clear();
 
             if (lastAnalyzedProtocol == "SPI" && spiAnalyzer != null) {
-                spiMatches = spiAnalyzer.DecodedBytes
-                    .Where(b => b.ValueMOSI == searchedValue || b.ValueMISO == searchedValue)
-                    .ToList();
-            } 
-            else if (lastAnalyzedProtocol == "UART" && uartAnalyzer != null) {
+                bool hasMiso = spiAnalyzer.HasMisoChannel();
+
+                if (hasMiso) {
+                    // mame MISO kanal, hledani v MOSI i MISO
+                    spiMatches = spiAnalyzer.DecodedBytes
+                        .Where(b => b.ValueMOSI == searchedValue || b.ValueMISO == searchedValue)
+                        .ToList();
+                } else {
+                    // nemame MISO, heldani jen v MOSI
+                    spiMatches = spiAnalyzer.DecodedBytes
+                        .Where(b => b.ValueMOSI == searchedValue)
+                        .ToList();
+                }
+            } else if (lastAnalyzedProtocol == "UART" && uartAnalyzer != null) {
                 uartMatches = uartAnalyzer.DecodedBytes
                     .Where(b => b.Value == searchedValue)
                     .ToList();
@@ -261,6 +270,15 @@ namespace OscilloscopeGUI {
                 string error = match.Error ?? "zadny";
                 string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
 
+                // Zjistime, jestli SPI analyzer ma MISO
+                bool hasMiso = spiAnalyzer?.HasMisoChannel() ?? false;
+
+                if (hasMiso) {
+                    Console.WriteLine($"[DEBUG] SPI match {currentMatchIndex + 1}/{spiMatches.Count}: ValueMOSI=0x{match.ValueMOSI:X2}, ValueMISO=0x{match.ValueMISO:X2}, Time={timestamp}s, Error={error}");
+                } else {
+                    Console.WriteLine($"[DEBUG] SPI match {currentMatchIndex + 1}/{spiMatches.Count}: ValueMOSI=0x{match.ValueMOSI:X2}, Time={timestamp}s, Error={error}");
+                }
+
                 ResultInfo.Text = $"Time: {timestamp}s | ASCII: {asciiChar} | Error: {error}";
 
                 if (currentMatchIndex == 0) {
@@ -278,6 +296,8 @@ namespace OscilloscopeGUI {
 
                 string error = match.Error ?? "zadny";
                 string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
+
+                Console.WriteLine($"[DEBUG] UART match {currentMatchIndex + 1}/{uartMatches.Count}: Value=0x{match.Value:X2}, Time={timestamp}s, Error={error}");
 
                 ResultInfo.Text = $"Time: {timestamp}s | ASCII: {asciiChar} | Error: {error}";
 
@@ -297,7 +317,7 @@ namespace OscilloscopeGUI {
             if (count == 0) return;
 
             currentMatchIndex = (currentMatchIndex + 1) % count;
-            ShowMatch();
+            ShowMatch();  
         }
 
         private void PrevResult_Click(object sender, RoutedEventArgs e) {
@@ -307,7 +327,7 @@ namespace OscilloscopeGUI {
             if (count == 0) return;
 
             currentMatchIndex = (currentMatchIndex - 1 + count) % count;
-            ShowMatch();
+            ShowMatch(); 
         }
 
         /// <summary>

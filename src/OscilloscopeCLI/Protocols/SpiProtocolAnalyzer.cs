@@ -300,5 +300,9 @@ namespace OscilloscopeCLI.Protocols {
 
             Console.WriteLine($"Výsledky SPI exportovány do souboru: {outputPath}");
         }
+
+        public bool HasMisoChannel() {
+            return hasMiso;
+        }
     }
 }
