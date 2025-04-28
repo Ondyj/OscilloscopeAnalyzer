@@ -1,17 +1,16 @@
-using OscilloscopeCLI.Signal;
-
 namespace OscilloscopeCLI.Protocols {
+    /// <summary>
+    /// Rozhrani pro analyzator protokolu.
+    /// </summary>
     public interface IProtocolAnalyzer {
+        /// <summary>
+        /// Nazev analyzovaneho protokolu.
+        /// </summary>
         string ProtocolName { get; }
 
         /// <summary>
-        /// Spusti analyzu signalu s nastavenim protokolu
+        /// Metoda pro provedení analyzy signalu podle daneho protokolu.
         /// </summary>
-        public void Analyze();
-
-        /// <summary>
-        /// Exportuje vysledky analyzy do souboru
-        /// </summary>
-        void ExportResults(string outputPath);
+        void Analyze();
     }
 }
