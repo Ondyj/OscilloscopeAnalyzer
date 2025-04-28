@@ -6,6 +6,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+
+      <!-- Povoleni generovani XML dokumentace -->
+    <!-- <GenerateDocumentationFile>true</GenerateDocumentationFile> -->
+    <!-- <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile> -->
   </PropertyGroup>
 
   <ItemGroup>
