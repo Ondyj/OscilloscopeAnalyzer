@@ -26,11 +26,11 @@ namespace OscilloscopeCLI.Protocols {
             bool idleLevelHigh = highCount > samples.Count / 2;
 
             return new UartSettings {
-                BaudRate = baudRate,
-                DataBits = 8,
-                Parity = Parity.None,
-                StopBits = 1,
-                IdleLevelHigh = idleLevelHigh
+                BaudRate = baudRate, // nastavi odhadnutou rychlost prenosu
+                DataBits = 8, // napevno
+                Parity = Parity.None, // napevno
+                StopBits = 1, // napevno
+                IdleLevelHigh = idleLevelHigh // nastavi, zda je idle uroven vysoka (log. 1) nebo nízká (log. 0)
             };
         }
 
