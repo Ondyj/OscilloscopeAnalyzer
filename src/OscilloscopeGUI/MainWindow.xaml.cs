@@ -291,8 +291,8 @@ namespace OscilloscopeGUI {
                                 // Automaticky odhad nastaveni UART:
                                 // - Spocita cas mezi zmenami stavu (hranami) => odhadne delku jednoho bitu => vypocita BaudRate.
                                 // - Urci, zda je linka v klidu ve stavu HIGH nebo LOW (IdleLevelHigh).
-                                // - Tyto data jsou nastaveny pevne: DataBits = 8, Parity = None, StopBits = 1
-                                uartSettings = ProtocolInferenceHelper.InferUartSettings(signalSamples);
+                                // - Tyto data jsou nastaveny pevne DataBits = 8, Parity = None, StopBits = 1
+                                uartSettings = UartInferenceHelper.InferUartSettings(signalSamples);
                             } catch (Exception ex) {
                                 MessageBox.Show($"Nepodařilo se odhadnout nastavení UART: {ex.Message}", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
                                 return;
@@ -304,17 +304,26 @@ namespace OscilloscopeGUI {
 
                     case "SPI":
                         SpiSettings spiSettings;
-                        if (isManual) {
+
+                        if (isManual) { // Pokud je manualni rezim, zobraz dialog a nacti nastaveni
                             var dialog = new SpiSettingsDialog();
                             if (dialog.ShowDialog() != true) return;
                             spiSettings = dialog.Settings;
                         } else {
-                            spiSettings = new SpiSettings {
-                                Cpol = false,
-                                Cpha = false,
-                                BitsPerWord = 8
-                            };
+                            try {
+                                // Automaticky odhad nastaveni SPI:
+                                // Na zaklade signalu z kanalu CH0 (CS) a CH1 (SCLK)
+                                // se provede analyza prubehu signalu a odhadne se:
+                                // - pocet bitu v jednom prenosu (BitsPerWord),
+                                // - CPOL a CPHA jsou zatim nastaveny pevne (CPOL = 0, CPHA = 0).
+                                spiSettings = SpiInferenceHelper.InferSettings(loader.SignalData);
+                            } catch (Exception ex) {
+                                MessageBox.Show($"Nepodařilo se odhadnout nastavení SPI: {ex.Message}",
+                                    "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                                return;
+                            }
                         }
+
                         activeAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings);
                         break;
 

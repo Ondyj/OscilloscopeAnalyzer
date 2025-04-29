@@ -6,15 +6,8 @@ namespace OscilloscopeCLI.Protocols;
 /// Trida pro vyhledavani SPI bajtu podle hodnoty.
 /// </summary>
 public class SpiMatchSearcher {
-    /// <summary>
-    /// Seznam dekodovanych SPI bajtu.
-    /// </summary>
-    private readonly List<SpiDecodedByte> decodedBytes;
-
-    /// <summary>
-    /// Seznam nalezenych vysledku odpovidajicich hledane hodnote.
-    /// </summary>
-    private List<SpiDecodedByte> matches = new();
+  private readonly List<SpiDecodedByte> decodedBytes; // Seznam dekodovanych SPI bajtu
+    private List<SpiDecodedByte> matches = new(); // Nalezene vysledky odpovidajici hledane hodnote
 
     /// <summary>
     /// Vytvori novou instanci tridy SpiMatchSearcher.
@@ -65,7 +58,7 @@ public class SpiMatchSearcher {
         string asciiChar = (match.ValueMOSI >= 32 && match.ValueMOSI <= 126)
             ? ((char)match.ValueMOSI).ToString()
             : $"\\x{match.ValueMOSI:X2}";
-        string error = match.Error ?? "zadny";
+        string error = match.Error ?? "žádný";
         string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
         return $"Time: {timestamp}s | ASCII: {asciiChar} | Error: {error}";
     }

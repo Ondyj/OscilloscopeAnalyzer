@@ -6,33 +6,16 @@ namespace OscilloscopeCLI.Protocols;
 /// Analyzer pro dekodovani SPI komunikace ze signalovych dat.
 /// </summary>
 public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExportableAnalyzer {
-    /// <summary>
-    /// Vstupni signalova data (timestamp, hodnota).
-    /// </summary>
-    private readonly Dictionary<string, List<Tuple<double, double>>> signalData;
+    private readonly Dictionary<string, List<Tuple<double, double>>> signalData; // Vstupni signalova data (timestamp, hodnota)
+    private readonly SpiSettings settings; // Nastaveni SPI analyzy (CPOL, CPHA, pocet bitu)
+    private bool hasMiso = false; // Udava, zda je dostupny kanal MISO
 
-    /// <summary>
-    /// Nastaveni SPI analyzy (CPOL, CPHA, pocet bitu).
-    /// </summary>
-    private readonly SpiSettings settings;
+    public List<SpiDecodedByte> DecodedBytes { get; private set; } = new(); // Seznam dekodovanych bajtu
 
-    /// <summary>
-    /// Udava, zda je dostupny kanal MISO.
-    /// </summary>
-    private bool hasMiso = false;
+    public string ProtocolName => "SPI"; // Nazev analyzovaneho protokolu
 
-    /// <summary>
-    /// Seznam dekodovanych bajtu.
-    /// </summary>
-    public List<SpiDecodedByte> DecodedBytes { get; private set; } = new();
-
-    /// <summary>
-    /// Nazev analyzovaneho protokolu.
-    /// </summary>
-    public string ProtocolName => "SPI";
-
-    private SpiMatchSearcher matchSearcher;
-    private SpiExporter exporter;
+    private SpiMatchSearcher matchSearcher; // Vyhledavac podle hodnoty
+    private SpiExporter exporter; // Exporter do CSV
 
     /// <summary>
     /// Vytvori novou instanci analyzatoru SPI protokolu.
@@ -90,7 +73,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
                 Timestamp = startTime,
                 ValueMOSI = 0,
                 ValueMISO = 0,
-                Error = "Prilis kratky prenos (zadne hrany SCLK)"
+                Error = "příliš krátký přenos (žádné hrany SCLK)"
             });
             return;
         }
@@ -118,7 +101,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
                 Timestamp = endTime,
                 ValueMOSI = PackBits(bitsMosi),
                 ValueMISO = hasMiso ? PackBits(bitsMiso) : (byte)0x00,
-                Error = "Nekompletni bajt (mene bitu nez ocekavano)"
+                Error = "nekompletní bajt (méně bitů než očekáváno)"
             });
         }
 
@@ -128,7 +111,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
                 Timestamp = endTime,
                 ValueMOSI = 0,
                 ValueMISO = 0,
-                Error = $"Nesoulad poctu hran ({edgesInTransfer.Count}) a ocekavanych bitu ({settings.BitsPerWord})"
+                Error = $"nesoulad počtu hran ({edgesInTransfer.Count}) a očekávaných bitů ({settings.BitsPerWord})"
             });
         }
     }
@@ -158,21 +141,10 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
 
     // --- IMPLEMENTACE INTERFACU ---
 
-    /// <inheritdoc/>
     public void Search(byte value) => matchSearcher.Search(value);
-
-    /// <inheritdoc/>
     public bool HasMatches() => matchSearcher.HasMatches();
-
-    /// <inheritdoc/>
     public int MatchCount => matchSearcher.MatchCount;
-
-    /// <inheritdoc/>
     public string GetMatchDisplay(int index) => matchSearcher.GetMatchDisplay(index);
-
-    /// <inheritdoc/>
     public double GetMatchTimestamp(int index) => matchSearcher.GetMatchTimestamp(index);
-
-    /// <inheritdoc/>
     public void ExportResults(string path) => exporter.ExportToCsv(path);
 }

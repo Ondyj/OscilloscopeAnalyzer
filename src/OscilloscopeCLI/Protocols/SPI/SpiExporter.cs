@@ -6,15 +6,8 @@ namespace OscilloscopeCLI.Protocols;
 /// Trida pro export dekodovanych SPI bajtu do CSV souboru.
 /// </summary>
 public class SpiExporter {
-    /// <summary>
-    /// Seznam dekodovanych SPI bajtu.
-    /// </summary>
-    private readonly List<SpiDecodedByte> decodedBytes;
-
-    /// <summary>
-    /// Priznak, zda byl dostupny kanal MISO.
-    /// </summary>
-    private readonly bool hasMiso;
+    private readonly List<SpiDecodedByte> decodedBytes; // Seznam dekodovanych SPI bajtu
+    private readonly bool hasMiso; // Priznak, zda byl dostupny kanal MISO
 
     /// <summary>
     /// Vytvori novou instanci tridy SpiExporter.

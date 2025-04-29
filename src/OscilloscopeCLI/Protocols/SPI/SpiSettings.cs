@@ -4,25 +4,11 @@ namespace OscilloscopeCLI.Protocols;
 /// Nastaveni pro analyzator SPI protokolu.
 /// </summary>
 public class SpiSettings : IProtocolSettings {
-    /// <summary>
-    /// Nazev protokolu.
-    /// </summary>
-    public string ProtocolName => "SPI";
+    public string ProtocolName => "SPI"; // Nazev protokolu
 
-    /// <summary>
-    /// Hodnota CPOL (Clock Polarity).
-    /// True = inverzni logika hodinoveho signalu.
-    /// </summary>
-    public bool Cpol { get; set; } = false;
+    public bool Cpol { get; set; } = false; // Hodnota CPOL (inverzni logika hodinoveho signalu)
 
-    /// <summary>
-    /// Hodnota CPHA (Clock Phase).
-    /// Udava, zda se data nactou na predni nebo zadni hrane.
-    /// </summary>
-    public bool Cpha { get; set; } = false;
+    public bool Cpha { get; set; } = false; // Hodnota CPHA (urcuje, kdy se nacitaji data)
 
-    /// <summary>
-    /// Pocet bitu v jednom prenosu (defaultne 8 bitu).
-    /// </summary>
-    public int BitsPerWord { get; set; } = 8;
+    public int BitsPerWord { get; set; } = 8; // Pocet bitu v jednom prenosu (vychozi 8)
 }
