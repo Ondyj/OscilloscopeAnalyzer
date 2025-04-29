@@ -6,15 +6,9 @@ namespace OscilloscopeCLI.Protocols;
 /// Trida pro vyhledavani UART bajtu podle hodnoty.
 /// </summary>
 public class UartMatchSearcher {
-    /// <summary>
-    /// Seznam dekodovanych UART bajtu.
-    /// </summary>
-    private readonly List<UartDecodedByte> decodedBytes;
+    private readonly List<UartDecodedByte> decodedBytes; // Seznam dekodovanych UART bajtu
+    private List<UartDecodedByte> matches = new(); // Seznam nalezenych vysledku odpovidajicich hledane hodnote
 
-    /// <summary>
-    /// Seznam nalezenych vysledku odpovidajicich hledane hodnote.
-    /// </summary>
-    private List<UartDecodedByte> matches = new();
 
     /// <summary>
     /// Vytvori novou instanci tridy UartMatchSearcher.
@@ -63,7 +57,7 @@ public class UartMatchSearcher {
         string ascii = (match.Value >= 32 && match.Value <= 126)
             ? ((char)match.Value).ToString()
             : $"\\x{match.Value:X2}";
-        string error = match.Error ?? "zadny";
+        string error = match.Error ?? "žádný";
         string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
         return $"Time: {timestamp}s | ASCII: {ascii} | Error: {error}";
     }

@@ -6,28 +6,12 @@ namespace OscilloscopeCLI.Protocols;
 /// Analyzer pro dekodovani UART komunikace ze signalovych dat.
 /// </summary>
 public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExportableAnalyzer {
-    /// <summary>
-    /// Vstupni signalova data (timestamp, logicka hodnota).
-    /// </summary>
-    private readonly Dictionary<string, List<SignalSample>> channelSamples;
-
-    /// <summary>
-    /// Nastaveni UART analyzy (baud rate, data bits, parita, stop bity, idle uroven).
-    /// </summary>
-    private readonly UartSettings settings;
-
-    /// <summary>
-    /// Seznam dekodovanych bajtu.
-    /// </summary>
-    public List<UartDecodedByte> DecodedBytes { get; private set; } = new();
-
-    /// <summary>
-    /// Nazev analyzovaneho protokolu.
-    /// </summary>
-    public string ProtocolName => "UART";
-
-    private UartMatchSearcher matchSearcher;
-    private UartExporter exporter;
+    private readonly Dictionary<string, List<SignalSample>> channelSamples; // Vstupni signalova data (timestamp, logicka hodnota)
+    private readonly UartSettings settings; // Nastaveni UART analyzy (baud rate, data bits, parita, stop bity, idle uroven)
+    public List<UartDecodedByte> DecodedBytes { get; private set; } = new(); // Seznam dekodovanych bajtu
+    public string ProtocolName => "UART"; // Nazev analyzovaneho protokolu
+    private UartMatchSearcher matchSearcher; // Vyhledavani shod v dekodovanych datech
+    private UartExporter exporter; // Export dekodovanych dat do souboru
 
     /// <summary>
     /// Vytvori novou instanci analyzatoru UART protokolu.
@@ -102,11 +86,11 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
 
         if (settings.Parity != Parity.None) {
             if (!CheckParity(samples, startTime, value, bitTime))
-                error = "Chyba parity";
+                error = "chyba parity";
         }
 
         if (!CheckStopBit(samples, startTime, bitTime, idleLevel))
-            error = (error != null ? error + " + " : "") + "Chyba stop bitu";
+            error = (error != null ? error + " + " : "") + "chyba stop bitu";
 
         return new UartDecodedByte {
             Timestamp = startTime,
@@ -142,11 +126,21 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     }
 
     /// <summary>
-    /// Overi spravnost stop bitu.
+    /// Overi spravnost vsech stop bitu.
     /// </summary>
     private bool CheckStopBit(List<SignalSample> samples, double startTime, double bitTime, bool idleLevel) {
-        double stopBitTime = GetStopBitTime(startTime, bitTime);
-        return GetBitAtTime(samples, stopBitTime) == idleLevel;
+        int dataBits = settings.DataBits;
+        int parityBits = settings.Parity != Parity.None ? 1 : 0;
+        int stopBits = settings.StopBits;
+
+        // Zkontroluj kazdy stop bit
+        for (int i = 0; i < stopBits; i++) {
+            double stopBitTime = startTime + (dataBits + parityBits + i + 1.5) * bitTime;
+            if (GetBitAtTime(samples, stopBitTime) != idleLevel) {
+                return false; // Jeden ze stop bitu je spatne
+            }
+        }
+        return true; // Vsechny stop bity jsou spravne
     }
 
     /// <summary>
@@ -171,21 +165,10 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
 
     // --- IMPLEMENTACE INTERFACU ---
 
-    /// <inheritdoc/>
     public void Search(byte value) => matchSearcher.Search(value);
-
-    /// <inheritdoc/>
     public bool HasMatches() => matchSearcher.HasMatches();
-
-    /// <inheritdoc/>
     public int MatchCount => matchSearcher.MatchCount;
-
-    /// <inheritdoc/>
     public string GetMatchDisplay(int index) => matchSearcher.GetMatchDisplay(index);
-
-    /// <inheritdoc/>
     public double GetMatchTimestamp(int index) => matchSearcher.GetMatchTimestamp(index);
-
-    /// <inheritdoc/>
     public void ExportResults(string outputPath) => exporter.ExportToCsv(outputPath);
 }

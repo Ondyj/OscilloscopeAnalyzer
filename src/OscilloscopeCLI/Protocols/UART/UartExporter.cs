@@ -6,10 +6,7 @@ namespace OscilloscopeCLI.Protocols;
 /// Trida pro export dekodovanych UART bajtu do CSV souboru.
 /// </summary>
 public class UartExporter {
-    /// <summary>
-    /// Seznam dekodovanych UART bajtu.
-    /// </summary>
-    private readonly List<UartDecodedByte> decodedBytes;
+    private readonly List<UartDecodedByte> decodedBytes; // Seznam dekodovanych UART bajtu
 
     /// <summary>
     /// Vytvori novou instanci tridy UartExporter.

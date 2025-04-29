@@ -275,19 +275,30 @@ namespace OscilloscopeGUI {
                 switch (selectedProtocol) {
                     case "UART":
                         UartSettings uartSettings;
-                        if (isManual) {
+                        if (isManual) { // Pokud je manualni rezim, zobraz dialog a nacti nastaveni
                             var dialog = new UartSettingsDialog();
                             if (dialog.ShowDialog() != true) return;
                             uartSettings = dialog.Settings;
-                        } else {
-                            uartSettings = new UartSettings {
-                                BaudRate = 115200,
-                                DataBits = 8,
-                                Parity = Parity.None,
-                                StopBits = 1,
-                                IdleLevelHigh = true
-                            };
+                        } else { // Automaticka detekce nastaveni ze singnalu
+                            try {
+                                var rawSamples = loader.SignalData.Values.FirstOrDefault();
+                                if (rawSamples == null || rawSamples.Count == 0) {
+                                    MessageBox.Show("Nebyly nalezeny žádné signály pro automatickou detekci.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                                    return;
+                                }
+
+                                var signalSamples = rawSamples.Select(t => new SignalSample(t.Item1, t.Item2 > 0.5)).ToList();
+                                // Automaticky odhad nastaveni UART:
+                                // - Spocita cas mezi zmenami stavu (hranami) => odhadne delku jednoho bitu => vypocita BaudRate.
+                                // - Urci, zda je linka v klidu ve stavu HIGH nebo LOW (IdleLevelHigh).
+                                // - Tyto data jsou nastaveny pevne: DataBits = 8, Parity = None, StopBits = 1
+                                uartSettings = ProtocolInferenceHelper.InferUartSettings(signalSamples);
+                            } catch (Exception ex) {
+                                MessageBox.Show($"Nepodařilo se odhadnout nastavení UART: {ex.Message}", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                                return;
+                            }
                         }
+
                         activeAnalyzer = new UartProtocolAnalyzer(loader.SignalData, uartSettings);
                         break;
 
