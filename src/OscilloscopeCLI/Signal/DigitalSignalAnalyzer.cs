@@ -2,6 +2,10 @@ using System;
 using System.Collections.Generic;
 
 namespace OscilloscopeCLI.Signal {
+
+    /// <summary>
+    /// Jeden vzorek digitalniho signalu s casovou znackou a stavem (0 nebo 1).
+    /// </summary>
     public class SignalSample {
         public double Timestamp { get; set; }
         public bool State { get; set; }
@@ -12,24 +16,37 @@ namespace OscilloscopeCLI.Signal {
         }
     }
 
+    /// <summary>
+    /// Reprezentuje prechod v digitalnim signalu (zmena stavu z 0 na 1 nebo naopak).
+    /// </summary>
     public class DigitalTransition {
         public double Time { get; set; }
         public int From { get; set; }
         public int To { get; set; }
     }
 
+    /// <summary>
+    /// Segment signalu s konstantni hodnotou v danem casovem rozsahu.
+    /// </summary>
     public class DigitalLevelSegment {
         public double StartTime { get; set; }
         public double EndTime { get; set; }
         public int Value { get; set; }
 
-        public double Duration => EndTime - StartTime;
+        public double Duration => EndTime - StartTime; // Delka trvani segmentu v sekundach.
     }
 
+    /// <summary>
+    /// Trida pro analyzu digitalniho signalu – detekce prechodu, konstantnich segmentu a casovani.
+    /// </summary>
     public class DigitalSignalAnalyzer {
         private readonly List<SignalSample> samples;
 
-        // konstruktor z Dictionary + klic kanalu
+         /// <summary>
+        /// Vytvori analyzator pro dany kanal z poskytnutych signalovych dat.
+        /// </summary>
+        /// <param name="signalData">Slovnik vsech signalu podle nazvu kanalu.</param>
+        /// <param name="channelKey">Nazev kanalu, ktery ma byt analyzovan.</param>
         public DigitalSignalAnalyzer(Dictionary<string, List<Tuple<double, double>>> signalData, string channelKey) {
             samples = new List<SignalSample>();
             if (signalData.TryGetValue(channelKey, out var rawSamples)) {
@@ -40,10 +57,9 @@ namespace OscilloscopeCLI.Signal {
         }
 
         /// <summary>
-        /// Detekuje vsechny prechody (hrany) v digitalnim signalu,
-        /// tj. zmenu stavu z 0 na 1 nebo z 1 na 0.
+        /// Detekuje vsechny prechody (hrany) v digitalnim signalu.
         /// </summary>
-        /// <returns>Seznam detekovanych prechodu s casem a zmenou stavu.</returns>
+        /// <returns>Seznam prechodu s casem a zmenou stavu.</returns>
         public List<DigitalTransition> DetectTransitions() {
             var transitions = new List<DigitalTransition>();
             for (int i = 1; i < samples.Count; i++) {
@@ -61,9 +77,9 @@ namespace OscilloscopeCLI.Signal {
         }
 
         /// <summary>
-        /// Vrati segmenty, kde mel signal konstantni hodnotu (0 nebo 1),
-        /// vcetne jejich casoveho trvani.
+        /// Vrati seznam segmentu, kde mel signal konstantni hodnotu.
         /// </summary>
+        /// <returns>Seznam segmentu se zacatkem, koncem a hodnotou (0 nebo 1).</returns>
         public List<DigitalLevelSegment> GetConstantLevelSegments() {
             var segments = new List<DigitalLevelSegment>();
             if (samples.Count == 0) return segments;
@@ -94,38 +110,11 @@ namespace OscilloscopeCLI.Signal {
         }
 
         /// <summary>
-        /// Vrati vsechny vzorky signalu pro dalsi analyzu nebo zobrazeni.
+        /// Vrati vsechny vzorky signalu pro dalsi zpracovani nebo vizualizaci.
         /// </summary>
-        /// <returns>Seznam vzorku obsahujici cas a stav signalu.</returns>
+        /// <returns>Seznam vzorku (cas, stav).</returns>
         public List<SignalSample> GetSamples() {
             return samples;
-        }
-
-        // TODO jednoducha analzza pro auto-detekci rychlosti (dummy prozatim)
-        public (double min, double max, double avg, double estimatedBaudRate) AnalyzeTiming() {
-            var times = new List<double>();
-            for (int i = 1; i < samples.Count; i++) {
-                if (samples[i].State != samples[i - 1].State) {
-                    times.Add(samples[i].Timestamp - samples[i - 1].Timestamp);
-                }
-            }
-
-            if (times.Count == 0) return (0, 0, 0, 0);
-
-            double min = double.MaxValue;
-            double max = double.MinValue;
-            double sum = 0;
-
-            foreach (var dt in times) {
-                if (dt < min) min = dt;
-                if (dt > max) max = dt;
-                sum += dt;
-            }
-
-            double avg = sum / times.Count;
-            double baud = avg > 0 ? 1.0 / avg : 0;
-
-            return (min, max, avg, baud);
         }
     }
 }

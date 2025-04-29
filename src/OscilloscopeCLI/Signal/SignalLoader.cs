@@ -6,21 +6,28 @@ using System.Globalization;
 using OscilloscopeCLI.Protocols;
 
 namespace OscilloscopeCLI.Signal {
+    /// <summary>
+    /// Trida pro nacitani signalovych dat z CSV souboru ruznych formatu (osciloskop, logicky analyzator).
+    /// Ulozena data jsou pristupna jako slovnik kanalu s casovou a hodnotovou slozkou.
+    /// </summary>
     public class SignalLoader {
         // Slovnik pro ukladani signalu, klice jsou nazvy kanalu
         public Dictionary<string, List<Tuple<double, double>>> SignalData { get; private set; } = new();
 
         /// <summary>
-        /// Nacte signalni data z CSV souboru v ruznych formatech (osciloskop, logicky analyzator, obecny CSV).
+        /// Nacte signalova data z CSV souboru ve formatu osciloskopu nebo logickeho analyzatoru.
+        /// Detekce formatu probiha automaticky podle hlavicky.
         /// </summary>
-        /// <param name="filePath">Cesta k souboru.</param>
+        /// <param name="filePath">Cesta k CSV souboru.</param>
+        /// <param name="progress">Volitelny reporter prubehu nacitani (0–100 %).</param>
+        /// <param name="cancellationToken">Volitelny token pro predcasne preruseni nacitani.</param>
         public void LoadCsvFile(string filePath, IProgress<int>? progress = null, CancellationToken cancellationToken = default) {
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"Soubor {filePath} nebyl nalezen.");
 
             SignalData.Clear();
             var lines = File.ReadAllLines(filePath);
-            if (lines.Length < 3) throw new Exception("Soubor nema dostatek radku pro nacteni dat.");
+            if (lines.Length < 3) throw new Exception("Soubor nemá dostatek řádku pro načtení dat.");
 
             // Detekce formatu na zaklade prvniho radku
             string[] firstRow = lines[0].Split(',');
@@ -35,32 +42,23 @@ namespace OscilloscopeCLI.Signal {
 
             // Odstraneni prazdnych kanalu
             RemoveEmptyChannels();
-
-        // --- DEBUG: Výpis prvních 10 vzorků ---
-            Console.WriteLine("[DEBUG] Ukázka načtených dat:");
-            foreach (var channel in SignalData) {
-                Console.WriteLine($"Kanál {channel.Key}:");
-                var samples = channel.Value;
-                for (int i = 0; i < Math.Min(10, samples.Count); i++) {
-                    var sample = samples[i];
-                    Console.WriteLine($"  {i + 1}. Čas: {sample.Item1:F9}s, Hodnota: {sample.Item2}");
-                }
-            }
-            Console.WriteLine("[DEBUG] --- konec výpisu ---");
         }
 
         /// <summary>
-        /// Nacte osciloskopova data, ktera obsahuji X, CH kanaly, Start a Increment.
+        /// Nacte data z osciloskopoveho CSV souboru, ktery obsahuje sloupce X, CH kanaly, Start a Increment.
+        /// Cas je odvozen na zaklade indexu a hodnoty inkrementu.
         /// </summary>
+        /// <param name="lines">Pole radku ze souboru.</param>
+        /// <param name="progress">Volitelny reporter prubehu nacitani (0–100 %).</param>
+        /// <param name="cancellationToken">Volitelny token pro preruseni.</param>
         private void LoadOscilloscopeData(string[] lines, IProgress<int>? progress = null, CancellationToken cancellationToken = default) {
-            Console.WriteLine("Detekovan osciloskopovy format.");
 
             var headers = lines[0].Split(',');
             var metadata = lines[1].Split(',');
 
             if (!double.TryParse(metadata[metadata.Length - 2], NumberStyles.Float, CultureInfo.InvariantCulture, out double startTime) ||
                 !double.TryParse(metadata[metadata.Length - 1], NumberStyles.Float, CultureInfo.InvariantCulture, out double increment)) {
-                throw new Exception("Neplatne hodnoty Start nebo Increment v metadatech.");
+                throw new Exception("Neplatné hodnoty Start nebo Increment v metadatech.");
             }
 
             Dictionary<int, string> channelIndexes = new();
@@ -97,14 +95,17 @@ namespace OscilloscopeCLI.Signal {
         }
 
         /// <summary>
-        /// Nacte data z logickeho analyzatoru
+        /// Nacte data z CSV souboru vygenerovaneho logickym analyzatorem.
+        /// Hlavicka zacina retezcem "Time(...)" a urcuje nazvy kanalu.
         /// </summary>
+        /// <param name="lines">Pole radku ze souboru.</param>
+        /// <param name="progress">Volitelny reporter prubehu nacitani (0–100 %).</param>
+        /// <param name="cancellationToken">Volitelny token pro preruseni.</param>
         private void LoadLogicAnalyzerData(string[] lines, IProgress<int>? progress = null, CancellationToken cancellationToken = default) {
-            Console.WriteLine("Detekovan format logickeho analyzatoru.");
 
             int headerIndex = Array.FindIndex(lines, line => line.StartsWith("Time("));
             if (headerIndex == -1 || headerIndex + 1 >= lines.Length)
-                throw new Exception("Soubor neobsahuje platnou hlavicku s casovymi udaji.");
+                throw new Exception("Soubor neobsahuje platnou hlavičku s casovými údaji.");
 
             var headers = lines[headerIndex].Split(',');
             for (int i = 1; i < headers.Length; i++) {
@@ -140,7 +141,8 @@ namespace OscilloscopeCLI.Signal {
         }
 
         /// <summary>
-        /// Odstrani kanaly, ktere obsahuji pouze nuly.
+        /// Odstrani z vyslednych dat vsechny kanaly, ktere obsahuji pouze nulove hodnoty.
+        /// Tim se zmensi pametova stopa a zvysi prehlednost vysledku.
         /// </summary>
         private void RemoveEmptyChannels() {
             var emptyChannels = SignalData
@@ -149,7 +151,6 @@ namespace OscilloscopeCLI.Signal {
                 .ToList();
 
             foreach (var channel in emptyChannels) {
-                //Console.WriteLine($"Odstranen prazdny kanal: {channel}");
                 SignalData.Remove(channel);
             }
         }

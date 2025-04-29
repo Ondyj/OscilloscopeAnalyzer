@@ -3,14 +3,21 @@ using System.Collections.Generic;
 using System.Linq;
 
 namespace OscilloscopeCLI.Signal {
-    public enum SignalType { Analog, Digital }
+    public enum SignalType { Analog, Digital } // Enum pro rozliseni typu signalu.
 
+    /// <summary>
+    /// Trida pro analyzu jednoho analogoveho nebo digitalniho signalu.
+    /// </summary>
     public class SignalAnalyzer {
-        public List<Tuple<double, double>> SignalData { get; private set; }
+        public List<Tuple<double, double>> SignalData { get; private set; } // Vstupni signalova data (cas, hodnota).
 
+        /// <summary>
+        /// Vytvori novou instanci analyzatoru signalu.
+        /// </summary>
+        /// <param name="signalData">Seznam dvojic (cas, hodnota) predstavujicich signal.</param>
         public SignalAnalyzer(List<Tuple<double, double>> signalData) {
             if (signalData == null || signalData.Count == 0)
-                throw new ArgumentException("SignalData nemuze byt prazdny.");
+                throw new ArgumentException("SignalData nemůže být prázdny.");
 
             SignalData = signalData;
         }
@@ -34,8 +41,10 @@ namespace OscilloscopeCLI.Signal {
         }
 
         /// <summary>
-        /// Detekuje pulzy v signalu, ktere jsou siroke nad stanovenou mez.
+        /// Detekuje pulzy v signalu, ktere presahuji danou prahovou hodnotu.
         /// </summary>
+        /// <param name="threshold">Prahovy limit pro detekci pulzu.</param>
+        /// <returns>Seznam pulzu ve forme dvojic (zacatek, konec).</returns>
         public List<Tuple<double, double>> DetectPulses(double threshold) {
             List<Tuple<double, double>> pulses = new();
             bool inPulse = false;
@@ -62,8 +71,8 @@ namespace OscilloscopeCLI.Signal {
         /// <summary>
         /// Vypocita prumernou sirku pulzu.
         /// </summary>
-        /// <param name="pulses">Seznam pulzu, kde kazdy prvek obsahuje dvojici hodnot: zacatek a konec pulzu.</param>
-        /// <returns>Prumerna sirka pulzu, nebo 0 pokud seznam neobsahuje zadne pulzy.</returns>
+        /// <param name="pulses">Seznam pulzu ve forme dvojic (zacatek, konec).</param>
+        /// <returns>Prumerna sirka pulzu nebo 0, pokud zadny pulz nebyl nalezen.</returns>
         public double CalculateAveragePulseWidth(List<Tuple<double, double>> pulses) {
             if (pulses.Count == 0) return 0;
             
