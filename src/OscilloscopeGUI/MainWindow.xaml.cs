@@ -49,7 +49,7 @@ namespace OscilloscopeGUI {
 
             plot.MouseDown += (s, e) => {
                 if (e.ChangedButton == MouseButton.Middle) {
-                    navService.ResetView();  // zavolani resetu kamery
+                    navService.ResetView(plotter.EarliestTime);  // zavolani resetu kamery
                     e.Handled = true;
                 }
             };
@@ -81,19 +81,17 @@ namespace OscilloscopeGUI {
         private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
             var cts = new CancellationTokenSource();
 
-            // dialog pro vyber souboru
+            // DIALOG PRO VYBER SOUBORU
             OpenFileDialog openFileDialog = new OpenFileDialog {
                 Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
             };
 
-            bool fileSelected = openFileDialog.ShowDialog() == true;
-            if (!fileSelected) {
-                return; // uzivatel zrusil vyber
-            }
+            if (openFileDialog.ShowDialog() != true)
+                return;
 
-            ResetState(); // vymaze se stav
+            ResetState();
 
-            // vytvoreni progressbaru
+            // ZOBRAZENI PROGRESS OKNA
             var progressDialog = new ProgressDialog();
             progressDialog.Show();
 
@@ -106,41 +104,46 @@ namespace OscilloscopeGUI {
             };
 
             try {
-                // Nacteme data z vybraneho souboru
-                bool success = await Task.Run(() =>
-                    {
-                        loader.LoadCsvFile(openFileDialog.FileName, progress, cts.Token);
-                        return loader.SignalData.Count > 0;
-                    }, cts.Token);
+                // NACITANI DAT
+                bool success = await Task.Run(() => {
+                    loader.LoadCsvFile(openFileDialog.FileName, progress, cts.Token);
+                    return loader.SignalData.Count > 0;
+                }, cts.Token);
 
                 if (cts.IsCancellationRequested) {
-                    progressDialog.Finish("Načítání bylo zrušeno uživatelem.", autoClose: false);
+                    progressDialog.Finish("Nacitani bylo zruseno uzivatelem.", autoClose: false);
                     progressDialog.OnOkClicked = () => progressDialog.Close();
                     return;
                 }
 
                 if (!success) {
                     progressDialog.SetErrorState();
-                    progressDialog.Finish("Načítání selhalo nebo byl načten poškozený soubor.", autoClose: false);
+                    progressDialog.Finish("Nacitani selhalo nebo byl nacten poskozeny soubor.", autoClose: false);
                     progressDialog.OnOkClicked = () => progressDialog.Close();
                     return;
                 }
 
-                // pokud uspesne nacteno
-                await PlotSignalGraphAsync();
-                progressDialog.Finish("Načítání dokončeno.", autoClose: false);
+                // ZMENIME TITULEK OKNA
+                progressDialog.SetTitle("Vykreslování...");
+                progressDialog.SetPhase("Vykreslování");
+                progressDialog.ReportMessage("Vykreslování signálu...");
+
+                // VYKRESLOVANI DAT
+                await plotter.PlotSignalsAsync(loader.SignalData, progress);
+                navService.ResetView(plotter.EarliestTime);
+
+                // HOTOVO
+                progressDialog.Finish("Vykreslovani dokonceno.", autoClose: false);
                 progressDialog.OnOkClicked = () => progressDialog.Close();
             }
             catch (OperationCanceledException) {
-                progressDialog.Finish("Načítání bylo zrušeno.", autoClose: false);
+                progressDialog.Finish("Nacitani bylo zruseno.", autoClose: false);
                 progressDialog.OnOkClicked = () => progressDialog.Close();
             }
             catch (Exception ex) {
                 progressDialog.SetErrorState();
-                progressDialog.Finish($"Chyba při načítání: {ex.Message}", autoClose: false);
-                progressDialog.OnOkClicked = () => {
-                    progressDialog.Close();
-                };
+                progressDialog.Finish($"Chyba pri nacitani: {ex.Message}", autoClose: false);
+                progressDialog.OnOkClicked = () => progressDialog.Close();
             }
         }
 
@@ -150,7 +153,7 @@ namespace OscilloscopeGUI {
         /// </summary>
         private async Task PlotSignalGraphAsync() {
             await plotter.PlotSignalsAsync(loader.SignalData); // SignalPlotter
-            navService.ResetView();
+            navService.ResetView(plotter.EarliestTime);
         }
 
         /// <summary>

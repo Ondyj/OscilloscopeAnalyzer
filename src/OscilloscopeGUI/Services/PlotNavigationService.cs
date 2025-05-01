@@ -10,7 +10,7 @@ namespace OscilloscopeGUI.Services {
         private readonly WpfPlot plot;
         private AxisLimits? baseLimits = null;
         private bool isZoomedIn = false;
-
+    
         public PlotNavigationService(WpfPlot plotControl) {
             plot = plotControl;
         }
@@ -38,8 +38,19 @@ namespace OscilloscopeGUI.Services {
                 xAxis.Max -= shiftX;
             } else if (key == Key.S || key == Key.Down) {
                 // Klavesa S nebo sipka dolu = zoom out (oddaleni)
-                xAxis.Min -= shiftX;
-                xAxis.Max += shiftX;
+                double newRange = rangeX + 2 * shiftX;
+
+                // Vychozi rozsah (pred zoomem)
+                double baseRange = (baseLimits?.XRange.Max - baseLimits?.XRange.Min) ?? rangeX;
+
+                // FIKSNI FAKTOR 
+                double maxAllowedFactor = 10;
+                double maxAllowedRange = baseRange * maxAllowedFactor;
+
+                if (newRange <= maxAllowedRange) {
+                    xAxis.Min -= shiftX;
+                    xAxis.Max += shiftX;
+                }
             } else if (key == Key.A) {
                 // Klavesa A = posun doleva
                 xAxis.Min -= panX;
@@ -68,21 +79,25 @@ namespace OscilloscopeGUI.Services {
         }
 
         /// <summary>
-        /// Resetuje pohled na graf do vychoziho stavu (jako po AutoScale)
+        /// Resetuje pohled na graf a zarovna zacatek signalu do stredu
         /// </summary>
-        public void ResetView() {
-            Console.WriteLine("ResetView.");
-
+        public void ResetView(double signalStartTime) {
             plot.Plot.Axes.AutoScale();
+            var limits = plot.Plot.Axes.GetLimits();
+
+            double originalRange = limits.XRange.Max - limits.XRange.Min;
+            double zoomFactor = 30;
+            double zoomedRange = originalRange / zoomFactor;
+
+            double newXMin = signalStartTime - zoomedRange / 2;
+            double newXMax = signalStartTime + zoomedRange / 2;
+
+            plot.Plot.Axes.SetLimitsX(newXMin, newXMax);
             plot.Refresh();
 
-            // Ulozime vychozi limity pro dalsi vyhledavani
             baseLimits = plot.Plot.Axes.GetLimits();
-            isZoomedIn = false; // A taky resetujeme priznak zoomu
-
-            Console.WriteLine(isZoomedIn);
+            isZoomedIn = false;
         }
-
 
         /// <summary>
         /// Posune graf horizontálně podle rozdilu souradnic X v pixelech
@@ -116,8 +131,6 @@ namespace OscilloscopeGUI.Services {
             double originalXMin = limits.XRange.Min;
             double originalXMax = limits.XRange.Max;
             double originalRange = originalXMax - originalXMin;
-
-            Console.WriteLine($"[DEBUG] originalRange = {originalRange:F6}");
 
             if (isZoomedIn)
                 return;

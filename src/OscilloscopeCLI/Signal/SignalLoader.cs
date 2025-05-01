@@ -22,30 +22,29 @@ namespace OscilloscopeCLI.Signal {
         /// <param name="progress">Volitelny reporter prubehu nacitani (0–100 %).</param>
         /// <param name="cancellationToken">Volitelny token pro predcasne preruseni nacitani.</param>
 
-    public void LoadCsvFile(string filePath, IProgress<int>? progress = null, CancellationToken cancellationToken = default) {
-        if (!File.Exists(filePath))
-            throw new FileNotFoundException($"Soubor {filePath} nebyl nalezen.");
+        public void LoadCsvFile(string filePath, IProgress<int>? progress = null, CancellationToken cancellationToken = default) {
+            if (!File.Exists(filePath))
+                throw new FileNotFoundException($"Soubor {filePath} nebyl nalezen.");
 
-        SignalData.Clear();
-        var lines = File.ReadAllLines(filePath);
-        if (lines.Length < 3) throw new Exception("Soubor nemá dostatek řádku pro načtení dat.");
+            SignalData.Clear();
+            var lines = File.ReadAllLines(filePath);
+            if (lines.Length < 3) throw new Exception("Soubor nemá dostatek řádku pro načtení dat.");
 
-        // 🟢 ZMĚNA: Split s TrimEntries pro odstranění potřeby Trim()
-        string[] firstRow = lines[0].Split(',', StringSplitOptions.TrimEntries);
-        bool isOscilloscopeFormat = firstRow.Contains("X") && firstRow.Any(col => col.StartsWith("CH")) &&
-                                    firstRow.Contains("Start") && firstRow.Contains("Increment");
+            string[] firstRow = lines[0].Split(',', StringSplitOptions.TrimEntries);
+            bool isOscilloscopeFormat = firstRow.Contains("X") && firstRow.Any(col => col.StartsWith("CH")) &&
+                                        firstRow.Contains("Start") && firstRow.Contains("Increment");
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        if (isOscilloscopeFormat) {
-            LoadOscilloscopeData(lines, progress, cancellationToken);
-        } else {
-            LoadLogicAnalyzerData(lines, progress, cancellationToken);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            if (isOscilloscopeFormat) {
+                LoadOscilloscopeData(lines, progress, cancellationToken);
+            } else {
+                LoadLogicAnalyzerData(lines, progress, cancellationToken);
+            }
+            sw.Stop();
+            Console.WriteLine($"Loading took {sw.ElapsedMilliseconds} ms");
+
+            RemoveEmptyChannels();
         }
-        sw.Stop();
-        Console.WriteLine($"Loading took {sw.ElapsedMilliseconds} ms");
-
-        RemoveEmptyChannels();
-    }
 
         /// <summary>
         /// Nacte data z osciloskopoveho CSV souboru, ktery obsahuje sloupce X, CH kanaly, Start a Increment.
@@ -55,7 +54,6 @@ namespace OscilloscopeCLI.Signal {
         /// <param name="progress">Volitelny reporter prubehu nacitani (0–100 %).</param>
         /// <param name="cancellationToken">Volitelny token pro preruseni.</param>
  private void LoadOscilloscopeData(string[] lines, IProgress<int>? progress = null, CancellationToken cancellationToken = default) {
-        // 🟢 ZMĚNA: TrimEntries odstraní potřebu Trim() později
         var headers = lines[0].Split(',', StringSplitOptions.TrimEntries);
         var metadata = lines[1].Split(',');
 
@@ -66,8 +64,8 @@ namespace OscilloscopeCLI.Signal {
 
         Dictionary<int, string> channelIndexes = new();
         for (int i = 1; i < headers.Length - 2; i++) {
-            string channelName = headers[i]; // 🟢 ZMĚNA: Už nemusíme dělat Trim()
-            SignalData[channelName] = new List<(double, double)>(); // 🟢 ZMĚNA: ValueTuple
+            string channelName = headers[i]; 
+            SignalData[channelName] = new List<(double, double)>(); 
             channelIndexes[i] = channelName;
         }
 
@@ -87,7 +85,7 @@ namespace OscilloscopeCLI.Signal {
             for (int j = 1; j < headers.Length - 2; j++) {
                 if (double.TryParse(parts[j], NumberStyles.Float, CultureInfo.InvariantCulture, out double value)) {
                     string channel = channelIndexes[j];
-                    SignalData[channel].Add((time, value)); // 🟢 ZMĚNA: ValueTuple
+                    SignalData[channel].Add((time, value)); 
                 }
             }
         }
@@ -106,12 +104,11 @@ namespace OscilloscopeCLI.Signal {
         if (headerIndex == -1 || headerIndex + 1 >= lines.Length)
             throw new Exception("Soubor neobsahuje platnou hlavičku s casovými údaji.");
 
-        // 🟢 ZMĚNA: TrimEntries pro hlavičku
         var headers = lines[headerIndex].Split(',', StringSplitOptions.TrimEntries);
         Dictionary<int, string> channelIndexes = new();
         for (int i = 1; i < headers.Length; i++) {
-            string channelName = $"CH{headers[i]}"; // 🟢 ZMĚNA: bez Trim()
-            SignalData[channelName] = new List<(double, double)>(); // 🟢 ZMĚNA: ValueTuple
+            string channelName = $"CH{headers[i]}"; 
+            SignalData[channelName] = new List<(double, double)>(); 
             channelIndexes[i] = channelName;
         }
 
@@ -134,8 +131,8 @@ namespace OscilloscopeCLI.Signal {
 
             for (int j = 1; j < parts.Length; j++) {
                 if (int.TryParse(parts[j], out int value)) {
-                    string channel = channelIndexes[j]; // 🟢 ZMĚNA: použito z dictionary
-                    SignalData[channel].Add((time, value)); // 🟢 ZMĚNA: ValueTuple
+                    string channel = channelIndexes[j]; 
+                    SignalData[channel].Add((time, value));
                 }
             }
         }
@@ -148,7 +145,7 @@ namespace OscilloscopeCLI.Signal {
             /// </summary>
         private void RemoveEmptyChannels() {
             var emptyChannels = SignalData
-                .Where(kv => kv.Value.All(v => v.Value == 0)) // 🟢 ZMĚNA: kvůli pojmenovanému ValueTuple
+                .Where(kv => kv.Value.All(v => v.Value == 0))
                 .Select(kv => kv.Key)
                 .ToList();
 
