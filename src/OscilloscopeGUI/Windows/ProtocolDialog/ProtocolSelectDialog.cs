@@ -8,8 +8,20 @@ namespace OscilloscopeGUI {
     public partial class ProtocolSelectDialog : Window {
         public string SelectedProtocol => ((ProtocolCombo.SelectedItem as ComboBoxItem)?.Content?.ToString()) ?? string.Empty;
 
-        public ProtocolSelectDialog() {
+        public ProtocolSelectDialog(int channelCount) {
             InitializeComponent();
+
+            if (channelCount < 3) {
+                // Odebrani SPI z ComboBoxu
+                foreach (var item in ProtocolCombo.Items.Cast<ComboBoxItem>().ToList()) {
+                    if (item.Content?.ToString() == "SPI") {
+                        ProtocolCombo.Items.Remove(item);
+                        break;
+                    }
+                }
+
+                ProtocolCombo.SelectedIndex = 0;
+            }
         }
 
         private void Ok_Click(object sender, RoutedEventArgs e) {

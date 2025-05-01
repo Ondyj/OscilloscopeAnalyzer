@@ -132,7 +132,7 @@ namespace OscilloscopeGUI {
                 progressDialog.OnOkClicked = () => progressDialog.Close();
 
                 // Vyber protokolu (napr. pomocí vlastního dialogu)
-                var protocolDialog = new ProtocolSelectDialog(); 
+                var protocolDialog = new ProtocolSelectDialog(loader.SignalData.Count);
                 protocolDialog.Owner = this;
                 if (protocolDialog.ShowDialog() != true)
                     return;
@@ -263,10 +263,7 @@ namespace OscilloscopeGUI {
             ResultInfo.Text = searchable.GetMatchDisplay(currentMatchIndex);
             double timestamp = searchable.GetMatchTimestamp(currentMatchIndex);
 
-            if (currentMatchIndex == 0)
-                navService.CenterOn(timestamp);
-            else
-                navService.MoveTo(timestamp);
+            navService.MoveTo(timestamp);
 
             // Pokud znacka jiz existuje, pouze zmenime X
             if (matchLine != null) {
@@ -452,6 +449,11 @@ namespace OscilloscopeGUI {
 
             ResultNavigationPanel.Visibility = Visibility.Collapsed;
             ResultInfo.Text = "";
+
+            if (matchLine != null) {
+                plot.Plot.Remove(matchLine);
+                matchLine = null;
+            }
 
             plot.Plot.Clear();
             plot.Refresh();
