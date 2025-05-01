@@ -16,6 +16,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
 
     private SpiMatchSearcher matchSearcher; // Vyhledavac podle hodnoty
     private SpiExporter exporter; // Exporter do CSV
+    public SpiSettings Settings => settings;
 
     private readonly SpiChannelMapping mapping;
 

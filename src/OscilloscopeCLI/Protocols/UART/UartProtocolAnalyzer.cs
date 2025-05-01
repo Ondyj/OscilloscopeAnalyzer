@@ -12,6 +12,7 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     public string ProtocolName => "UART"; // Nazev analyzovaneho protokolu
     private UartMatchSearcher matchSearcher; // Vyhledavani shod v dekodovanych datech
     private UartExporter exporter; // Export dekodovanych dat do souboru
+    public UartSettings Settings => settings;
 
     /// <summary>
     /// Vytvori novou instanci analyzatoru UART protokolu.

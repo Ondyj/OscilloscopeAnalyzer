@@ -30,6 +30,7 @@ namespace OscilloscopeGUI {
         private ScottPlot.Plottables.VerticalLine? matchLine = null;
 
         private SpiChannelMapping? lastUsedSpiMapping = null;
+        private string? loadedFilePath = null;
 
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -93,6 +94,8 @@ namespace OscilloscopeGUI {
                 return;
 
             ResetState();
+
+            loadedFilePath = openFileDialog.FileName;
 
             // Zobrazeni progress dialogu
             var progressDialog = new ProgressDialog();
@@ -411,20 +414,41 @@ namespace OscilloscopeGUI {
             return true;
         }
 
-            private void ExportResultsButton_Click(object sender, RoutedEventArgs e) {
-                if (activeAnalyzer is not IExportableAnalyzer exportable) {
-                    MessageBox.Show("Aktivní analyzátor nepodporuje export.", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                string outputDir = "Vysledky";
-                Directory.CreateDirectory(outputDir);
-                string outputPath = GetUniqueFilePath(outputDir, $"{exportable.ProtocolName.ToLower()}.csv");
-
-                exportable.ExportResults(outputPath);
-
-                MessageBox.Show($"Výsledky byly exportovány do:\n{outputPath}", "Export dokončen", MessageBoxButton.OK, MessageBoxImage.Information);
+        private void ExportResultsButton_Click(object sender, RoutedEventArgs e) {
+            if (activeAnalyzer is not IExportableAnalyzer exportable) {
+                MessageBox.Show("Aktivní analyzátor nepodporuje export.", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
+
+            if (loadedFilePath == null) {
+                MessageBox.Show("Není k dispozici cesta k původnímu souboru.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            string inputFileName = Path.GetFileNameWithoutExtension(loadedFilePath);
+            string outputDir = "Vysledky";
+            Directory.CreateDirectory(outputDir);
+
+            // Pridame parametry analyzy do nazvu souboru (napr. UART_9600_8N1)
+            string paramInfo = "";
+
+            if (activeAnalyzer is UartProtocolAnalyzer uart) {
+                var s = uart.Settings;
+                paramInfo = $"UART_{s.BaudRate}_{s.DataBits}{(s.Parity == Parity.None ? 'N' : s.Parity.ToString()[0])}{s.StopBits}";
+            } else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
+                var s = spi.Settings;
+                paramInfo = $"SPI_{s.BitsPerWord}b_{(s.Cpol ? "CPOL1" : "CPOL0")}_{(s.Cpha ? "CPHA1" : "CPHA0")}";
+            } else {
+                paramInfo = exportable.ProtocolName;
+            }
+
+            string outputFileName = $"{inputFileName}_{paramInfo}.csv";
+            string outputPath = GetUniqueFilePath(outputDir, outputFileName);
+
+            exportable.ExportResults(outputPath);
+
+            MessageBox.Show($"Výsledky byly exportovány do:\n{outputPath}", "Export dokončen", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
 
 
         private string GetUniqueFilePath(string directory, string baseFileName) {
