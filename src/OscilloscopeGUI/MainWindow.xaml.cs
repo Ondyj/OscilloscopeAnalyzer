@@ -28,6 +28,8 @@ namespace OscilloscopeGUI {
         private int currentMatchIndex = 0;
         private byte? searchedValue = null;
 
+        private SpiChannelMapping? lastUsedSpiMapping = null;
+
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -81,7 +83,7 @@ namespace OscilloscopeGUI {
         private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
             var cts = new CancellationTokenSource();
 
-            // DIALOG PRO VYBER SOUBORU
+            // Vyber CSV souboru
             OpenFileDialog openFileDialog = new OpenFileDialog {
                 Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
             };
@@ -91,20 +93,14 @@ namespace OscilloscopeGUI {
 
             ResetState();
 
-            // ZOBRAZENI PROGRESS OKNA
+            // Zobrazeni progress dialogu
             var progressDialog = new ProgressDialog();
             progressDialog.Show();
-
-            var progress = new Progress<int>(value => {
-                progressDialog.ReportProgress(value);
-            });
-
-            progressDialog.OnCanceled = () => {
-                cts.Cancel();
-            };
+            var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
+            progressDialog.OnCanceled = () => cts.Cancel();
 
             try {
-                // NACITANI DAT
+                // Nacitani CSV
                 bool success = await Task.Run(() => {
                     loader.LoadCsvFile(openFileDialog.FileName, progress, cts.Token);
                     return loader.SignalData.Count > 0;
@@ -123,22 +119,54 @@ namespace OscilloscopeGUI {
                     return;
                 }
 
-                // ZMENIME TITULEK OKNA
+                // Vykresleni
                 progressDialog.SetTitle("Vykreslování...");
                 progressDialog.SetPhase("Vykreslování");
                 progressDialog.ReportMessage("Vykreslování signálu...");
 
-                // VYKRESLOVANI DAT
                 await plotter.PlotSignalsAsync(loader.SignalData, progress);
                 navService.ResetView(plotter.EarliestTime);
 
-                // HOTOVO
-                progressDialog.Finish("Vykreslovani dokonceno.", autoClose: false);
+                progressDialog.Finish("Vykreslovani dokonceno.", autoClose: true);
                 progressDialog.OnOkClicked = () => progressDialog.Close();
-            }
-            catch (OperationCanceledException) {
-                progressDialog.Finish("Nacitani bylo zruseno.", autoClose: false);
-                progressDialog.OnOkClicked = () => progressDialog.Close();
+
+                // Vyber protokolu (napr. pomocí vlastního dialogu)
+                var protocolDialog = new ProtocolSelectDialog(); 
+                protocolDialog.Owner = this;
+                if (protocolDialog.ShowDialog() != true)
+                    return;
+
+                string selectedProtocol = protocolDialog.SelectedProtocol;
+
+                // Mapovani SPI
+                if (selectedProtocol == "SPI") {
+                    var spiMapDialog = new SpiChannelMappingDialog(loader.SignalData.Keys.ToList());
+                    spiMapDialog.Owner = this;
+                    if (spiMapDialog.ShowDialog() != true)
+                        return;
+
+                    lastUsedSpiMapping = spiMapDialog.Mapping;
+
+                    // Prejmenovani legendy
+                    var renameMap = new Dictionary<string, string> {
+                        { lastUsedSpiMapping.ChipSelect, "CS" },
+                        { lastUsedSpiMapping.Clock, "SCLK" },
+                        { lastUsedSpiMapping.Mosi, "MOSI" }
+                    };
+                    if (!string.IsNullOrEmpty(lastUsedSpiMapping.Miso))
+                        renameMap[lastUsedSpiMapping.Miso] = "MISO";
+
+                    plotter.RenameChannels(renameMap);
+                }
+
+                // Inicializace analyzeru podle zvoleneho protokolu
+                switch (selectedProtocol) {
+                    case "SPI":
+                        var inferredSettings = SpiInferenceHelper.InferSettings(loader.SignalData);
+                        activeAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, inferredSettings, lastUsedSpiMapping!);
+                        break;
+                    // TODO: Doplnit UART, I2C, ...
+                }
             }
             catch (Exception ex) {
                 progressDialog.SetErrorState();
@@ -305,30 +333,32 @@ namespace OscilloscopeGUI {
                         activeAnalyzer = new UartProtocolAnalyzer(loader.SignalData, uartSettings);
                         break;
 
-                    case "SPI":
-                        SpiSettings spiSettings;
+                        case "SPI":
+                            SpiSettings spiSettings;
 
-                        if (isManual) { // Pokud je manualni rezim, zobraz dialog a nacti nastaveni
-                            var dialog = new SpiSettingsDialog();
-                            if (dialog.ShowDialog() != true) return;
-                            spiSettings = dialog.Settings;
-                        } else {
-                            try {
-                                // Automaticky odhad nastaveni SPI:
-                                // Na zaklade signalu z kanalu CH0 (CS) a CH1 (SCLK)
-                                // se provede analyza prubehu signalu a odhadne se:
-                                // - pocet bitu v jednom prenosu (BitsPerWord),
-                                // - CPOL a CPHA jsou zatim nastaveny pevne (CPOL = 0, CPHA = 0).
-                                spiSettings = SpiInferenceHelper.InferSettings(loader.SignalData);
-                            } catch (Exception ex) {
-                                MessageBox.Show($"Nepodařilo se odhadnout nastavení SPI: {ex.Message}",
-                                    "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
-                                return;
+                            if (isManual) {
+                                var dialog = new SpiSettingsDialog();
+                                if (dialog.ShowDialog() != true) return;
+                                spiSettings = dialog.Settings;
+                            } else {
+                                try {
+                                    spiSettings = SpiInferenceHelper.InferSettings(loader.SignalData);
+                                } catch (Exception ex) {
+                                    MessageBox.Show($"Nepodařilo se odhadnout nastavení SPI: {ex.Message}",
+                                        "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                                    return;
+                                }
                             }
-                        }
 
-                        activeAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings);
-                        break;
+                            // Pokud už máme uložené mapování z LoadCsv_Click, použijeme ho
+                            if (lastUsedSpiMapping == null) {
+                                var mapDialog = new SpiChannelMappingDialog(loader.SignalData.Keys.ToList());
+                                if (mapDialog.ShowDialog() != true) return;
+                                lastUsedSpiMapping = mapDialog.Mapping;
+                            }
+
+                            activeAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings, lastUsedSpiMapping);
+                            break;
 
                     case "I2C":
                         //TODO

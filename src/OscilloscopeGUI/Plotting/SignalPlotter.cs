@@ -156,5 +156,21 @@ namespace OscilloscopeGUI.Plotting {
 
             return (simplifiedTimes.ToArray(), simplifiedValues.ToArray());
         }
-    }
+
+        /// <summary>
+        /// Aktualizuje popisky legendy podle noveho pojmenovani kanalu
+        /// </summary>
+        public void RenameChannels(Dictionary<string, string> channelRenames) {
+            plot.Dispatcher.Invoke(() => {
+                foreach (var plottable in plot.Plot.GetPlottables()) {
+                    if (plottable is ScottPlot.Plottables.SignalXY signal && 
+                        signal.LegendText is string legend && // null-check
+                        channelRenames.TryGetValue(legend, out string? newName)) {
+                        signal.LegendText = newName;
+                    }
+                }
+                plot.Refresh();
+            });
+        }
+    } 
 }

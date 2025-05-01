@@ -17,15 +17,19 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     private SpiMatchSearcher matchSearcher; // Vyhledavac podle hodnoty
     private SpiExporter exporter; // Exporter do CSV
 
+    private readonly SpiChannelMapping mapping;
+
     /// <summary>
     /// Vytvori novou instanci analyzatoru SPI protokolu.
     /// </summary>
-    /// <param name="signalData">Signalova data.</param>
-    /// <param name="settings">Nastaveni SPI analyzatoru.</param>
-    public SpiProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, SpiSettings settings) {
+    /// <param name="signalData">Vstupni signalova data ve formatu: kanal -> seznam (cas, hodnota).</param>
+    /// <param name="settings">Nastaveni parametru SPI komunikace (CPOL, CPHA, BitsPerWord).</param>
+    /// <param name="mapping">Mapovani fyzickych kanalu na funkce protokolu (CS, SCLK, MOSI, MISO).</param>
+    public SpiProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, SpiSettings settings, SpiChannelMapping mapping) {
         this.signalData = signalData;
         this.settings = settings;
-        hasMiso = signalData.ContainsKey("CH3") && signalData["CH3"].Count > 0;
+        this.mapping = mapping;
+        hasMiso = !string.IsNullOrEmpty(mapping.Miso) && signalData.ContainsKey(mapping.Miso);
 
         matchSearcher = new SpiMatchSearcher(DecodedBytes);
         exporter = new SpiExporter(DecodedBytes, hasMiso);
@@ -37,14 +41,14 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     public void Analyze() {
         DecodedBytes.Clear();
 
-        var csAnalyzer = new DigitalSignalAnalyzer(signalData, "CH0");
-        var sclkAnalyzer = new DigitalSignalAnalyzer(signalData, "CH1");
-        var mosiAnalyzer = new DigitalSignalAnalyzer(signalData, "CH2");
+        var csAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.ChipSelect);
+        var sclkAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Clock);
+        var mosiAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Mosi);
 
         DigitalSignalAnalyzer? misoAnalyzer = null;
-        hasMiso = signalData.ContainsKey("CH3") && signalData["CH3"].Count > 0;
+        hasMiso = !string.IsNullOrEmpty(mapping.Miso) && signalData.ContainsKey(mapping.Miso);
         if (hasMiso)
-            misoAnalyzer = new DigitalSignalAnalyzer(signalData, "CH3");
+            misoAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Miso!);
 
         var activeTransfers = csAnalyzer.GetConstantLevelSegments().Where(seg => seg.Value == 0).ToList();
         var sclkEdges = sclkAnalyzer.DetectTransitions().Where(t => {
