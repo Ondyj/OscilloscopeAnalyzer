@@ -6,7 +6,7 @@ namespace OscilloscopeCLI.Protocols;
 /// Analyzer pro dekodovani UART komunikace ze signalovych dat.
 /// </summary>
 public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExportableAnalyzer {
-    private readonly Dictionary<string, List<SignalSample>> channelSamples; // Vstupni signalova data (timestamp, logicka hodnota)
+    private readonly Dictionary<string, List<(double Timestamp, bool State)>> channelSamples;  // Vstupni signalova data (timestamp, logicka hodnota)
     private readonly UartSettings settings; // Nastaveni UART analyzy (baud rate, data bits, parita, stop bity, idle uroven)
     public List<UartDecodedByte> DecodedBytes { get; private set; } = new(); // Seznam dekodovanych bajtu
     public string ProtocolName => "UART"; // Nazev analyzovaneho protokolu
@@ -18,11 +18,11 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     /// </summary>
     /// <param name="signalData">Signalova data.</param>
     /// <param name="settings">Nastaveni UART analyzatoru.</param>
-    public UartProtocolAnalyzer(Dictionary<string, List<Tuple<double, double>>> signalData, UartSettings settings) {
+    public UartProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, UartSettings settings) {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.channelSamples = signalData.ToDictionary(
             kvp => kvp.Key,
-            kvp => kvp.Value.Select(pair => new SignalSample(pair.Item1, pair.Item2 != 0)).ToList()
+            kvp => kvp.Value.Select(p => (p.Time, p.Value > 0.5)).ToList()
         );
 
         matchSearcher = new UartMatchSearcher(DecodedBytes);
@@ -50,7 +50,7 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     /// <summary>
     /// Analyzuje jednotlive signaly v kanale.
     /// </summary>
-    private void AnalyzeChannel(string channelName, List<SignalSample> samples, double bitTime, bool idleLevel) {
+    private void AnalyzeChannel(string channelName, List<(double Timestamp, bool State)> samples, double bitTime, bool idleLevel) {
         int i = 1;
         while (i < samples.Count) {
             var previous = samples[i - 1];
@@ -74,7 +74,7 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     /// <summary>
     /// Dekoduje jeden UART bajt ze vzorku.
     /// </summary>
-    private UartDecodedByte DecodeByte(List<SignalSample> samples, double startTime, double bitTime, bool idleLevel) {
+    private UartDecodedByte DecodeByte(List<(double Timestamp, bool State)> samples, double startTime, double bitTime, bool idleLevel) {
         byte value = 0;
         string? error = null;
 
@@ -102,7 +102,7 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     /// <summary>
     /// Zjisti hodnotu signalu v urcitem case.
     /// </summary>
-    private bool GetBitAtTime(List<SignalSample> samples, double timestamp) {
+    private bool GetBitAtTime(List<(double Timestamp, bool State)> samples, double timestamp) {
         for (int i = 1; i < samples.Count; i++) {
             if (samples[i].Timestamp >= timestamp)
                 return samples[i - 1].State;
@@ -113,7 +113,7 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     /// <summary>
     /// Overi spravnost parity bajtu.
     /// </summary>
-    private bool CheckParity(List<SignalSample> samples, double startTime, byte value, double bitTime) {
+    private bool CheckParity(List<(double Timestamp, bool State)> samples, double startTime, byte value, double bitTime) {
         double parityTime = startTime + ((settings.DataBits + 1.5) * bitTime);
         bool parityBit = GetBitAtTime(samples, parityTime);
         bool calculatedParity = CalculateParity(value);
@@ -128,19 +128,18 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     /// <summary>
     /// Overi spravnost vsech stop bitu.
     /// </summary>
-    private bool CheckStopBit(List<SignalSample> samples, double startTime, double bitTime, bool idleLevel) {
+    private bool CheckStopBit(List<(double Timestamp, bool State)> samples, double startTime, double bitTime, bool idleLevel) {
         int dataBits = settings.DataBits;
         int parityBits = settings.Parity != Parity.None ? 1 : 0;
         int stopBits = settings.StopBits;
 
-        // Zkontroluj kazdy stop bit
         for (int i = 0; i < stopBits; i++) {
             double stopBitTime = startTime + (dataBits + parityBits + i + 1.5) * bitTime;
             if (GetBitAtTime(samples, stopBitTime) != idleLevel) {
-                return false; // Jeden ze stop bitu je spatne
+                return false;
             }
         }
-        return true; // Vsechny stop bity jsou spravne
+        return true;
     }
 
     /// <summary>

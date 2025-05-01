@@ -8,7 +8,7 @@ namespace OscilloscopeCLI.Protocols {
         /// <summary>
         /// Odhadne nastaveni SPI protokolu ze signalovych dat.
         /// </summary>
-        public static SpiSettings InferSettings(Dictionary<string, List<Tuple<double, double>>> signalData) {
+        public static SpiSettings InferSettings(Dictionary<string, List<(double Time, double Value)>> signalData) {
             if (!signalData.ContainsKey("CH0") || !signalData.ContainsKey("CH1"))
                 throw new InvalidOperationException("CH0 (CS) nebo CH1 (SCLK) chybí.");
 
@@ -20,8 +20,8 @@ namespace OscilloscopeCLI.Protocols {
             if (sclkSamples.Count < 10)
                 throw new InvalidOperationException("Nedostatek dat pro odhad SPI nastavení.");
 
-            var tempData = new Dictionary<string, List<Tuple<double, double>>> {
-                { "CH0", csSamples.Select(s => Tuple.Create(s.Timestamp, s.State ? 1.0 : 0.0)).ToList() }
+            var tempData = new Dictionary<string, List<(double Time, double Value)>> {
+                { "CH0", csSamples.Select(s => (s.Timestamp, s.State ? 1.0 : 0.0)).ToList() }
             };
 
             var csAnalyzer = new DigitalSignalAnalyzer(tempData, "CH0");

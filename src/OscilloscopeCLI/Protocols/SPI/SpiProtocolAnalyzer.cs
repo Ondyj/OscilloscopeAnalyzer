@@ -6,7 +6,7 @@ namespace OscilloscopeCLI.Protocols;
 /// Analyzer pro dekodovani SPI komunikace ze signalovych dat.
 /// </summary>
 public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExportableAnalyzer {
-    private readonly Dictionary<string, List<Tuple<double, double>>> signalData; // Vstupni signalova data (timestamp, hodnota)
+    private readonly Dictionary<string, List<(double Time, double Value)>> signalData;  // Vstupni signalova data (timestamp, hodnota)
     private readonly SpiSettings settings; // Nastaveni SPI analyzy (CPOL, CPHA, pocet bitu)
     private bool hasMiso = false; // Udava, zda je dostupny kanal MISO
 
@@ -22,7 +22,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     /// </summary>
     /// <param name="signalData">Signalova data.</param>
     /// <param name="settings">Nastaveni SPI analyzatoru.</param>
-    public SpiProtocolAnalyzer(Dictionary<string, List<Tuple<double, double>>> signalData, SpiSettings settings) {
+    public SpiProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, SpiSettings settings) {
         this.signalData = signalData;
         this.settings = settings;
         hasMiso = signalData.ContainsKey("CH3") && signalData["CH3"].Count > 0;
@@ -59,6 +59,13 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         }
     }
 
+    private static Dictionary<string, List<Tuple<double, double>>> ConvertToTuple(Dictionary<string, List<(double Time, double Value)>> source) {
+        return source.ToDictionary(
+            kv => kv.Key,
+            kv => kv.Value.Select(p => Tuple.Create(p.Time, p.Value)).ToList()
+        );
+    }
+
     /// <summary>
     /// Analyzuje jednotlive SPI prenosy v ramci jednoho CS aktivniho segmentu.
     /// </summary>
@@ -67,7 +74,6 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         var bitsMosi = new List<bool>();
         var bitsMiso = new List<bool>();
 
-        // Pokud neni zadna hrana v ramci CS LOW, zaznamename chybu
         if (edgesInTransfer.Count == 0) {
             DecodedBytes.Add(new SpiDecodedByte {
                 Timestamp = startTime,
@@ -95,7 +101,6 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
             }
         }
 
-        // Pokud po prenosu zbyvaji nejake nenahrane bity
         if (bitsMosi.Count > 0) {
             DecodedBytes.Add(new SpiDecodedByte {
                 Timestamp = endTime,
@@ -105,7 +110,6 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
             });
         }
 
-        // Kontrola souhlasu poctu hran a bitu
         if (edgesInTransfer.Count != settings.BitsPerWord && bitsMosi.Count == 0) {
             DecodedBytes.Add(new SpiDecodedByte {
                 Timestamp = endTime,
@@ -116,16 +120,18 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         }
     }
 
+
     /// <summary>
     /// Vrati stav signalu v danem case.
     /// </summary>
-    private bool GetBitAtTime(List<SignalSample> samples, double time) {
+    private bool GetBitAtTime(List<(double Timestamp, bool State)> samples, double time) {
         for (int i = 1; i < samples.Count; i++) {
             if (samples[i].Timestamp >= time)
                 return samples[i - 1].State;
         }
         return samples[^1].State;
     }
+
 
     /// <summary>
     /// Prevede seznam bitu (LSB first) na bajt.

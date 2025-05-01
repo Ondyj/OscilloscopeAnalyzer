@@ -27,7 +27,7 @@ namespace OscilloscopeGUI.Plotting {
         /// Asynchronne vykresli vsechny signaly v datasetu do grafu
         /// </summary>
         /// <param name="signalData">Data se signaly rozdelena podle nazvu kanalu</param>
-       public async Task PlotSignalsAsync(Dictionary<string, List<Tuple<double, double>>> signalData) {
+        public async Task PlotSignalsAsync(Dictionary<string, List<(double Time, double Value)>> signalData) {
             await Task.Run(() => {
                 plot.Dispatcher.Invoke(() => {
                     plot.Plot.Clear(); // Vymazani puvodniho obsahu grafu
@@ -37,8 +37,8 @@ namespace OscilloscopeGUI.Plotting {
 
                     foreach (var channel in signalData) {
                         string channelName = channel.Key;
-                        double[] times = channel.Value.Select(v => v.Item1).ToArray(); // Casove hodnoty
-                        double[] voltages = channel.Value.Select(v => v.Item2).ToArray(); // Napetove hodnoty
+                        double[] times = channel.Value.Select(v => v.Time).ToArray();
+                        double[] voltages = channel.Value.Select(v => v.Value).ToArray();
 
                         double minValue = voltages.Min();
                         double maxValue = voltages.Max();

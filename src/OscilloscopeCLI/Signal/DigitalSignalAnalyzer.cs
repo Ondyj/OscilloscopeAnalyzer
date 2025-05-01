@@ -40,18 +40,18 @@ namespace OscilloscopeCLI.Signal {
     /// Trida pro analyzu digitalniho signalu – detekce prechodu, konstantnich segmentu a casovani.
     /// </summary>
     public class DigitalSignalAnalyzer {
-        private readonly List<SignalSample> samples;
+        private readonly List<(double Timestamp, bool State)> samples;
 
          /// <summary>
         /// Vytvori analyzator pro dany kanal z poskytnutych signalovych dat.
         /// </summary>
         /// <param name="signalData">Slovnik vsech signalu podle nazvu kanalu.</param>
         /// <param name="channelKey">Nazev kanalu, ktery ma byt analyzovan.</param>
-        public DigitalSignalAnalyzer(Dictionary<string, List<Tuple<double, double>>> signalData, string channelKey) {
-            samples = new List<SignalSample>();
+        public DigitalSignalAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, string channelKey) {
+            samples = new List<(double, bool)>();
             if (signalData.TryGetValue(channelKey, out var rawSamples)) {
                 foreach (var (timestamp, value) in rawSamples) {
-                    samples.Add(new SignalSample(timestamp, value != 0));
+                    samples.Add((timestamp, value != 0));
                 }
             }
         }
@@ -113,7 +113,7 @@ namespace OscilloscopeCLI.Signal {
         /// Vrati vsechny vzorky signalu pro dalsi zpracovani nebo vizualizaci.
         /// </summary>
         /// <returns>Seznam vzorku (cas, stav).</returns>
-        public List<SignalSample> GetSamples() {
+        public List<(double Timestamp, bool State)> GetSamples() {
             return samples;
         }
     }
