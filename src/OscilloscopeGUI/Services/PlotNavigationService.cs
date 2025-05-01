@@ -44,7 +44,7 @@ namespace OscilloscopeGUI.Services {
                 double baseRange = (baseLimits?.XRange.Max - baseLimits?.XRange.Min) ?? rangeX;
 
                 // FIKSNI FAKTOR 
-                double maxAllowedFactor = 10;
+                double maxAllowedFactor = 5;
                 double maxAllowedRange = baseRange * maxAllowedFactor;
 
                 if (newRange <= maxAllowedRange) {
