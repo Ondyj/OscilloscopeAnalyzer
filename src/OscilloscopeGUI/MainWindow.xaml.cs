@@ -27,6 +27,7 @@ namespace OscilloscopeGUI {
         private IProtocolAnalyzer? activeAnalyzer;
         private int currentMatchIndex = 0;
         private byte? searchedValue = null;
+        private ScottPlot.Plottables.VerticalLine? matchLine = null;
 
         private SpiChannelMapping? lastUsedSpiMapping = null;
 
@@ -266,8 +267,18 @@ namespace OscilloscopeGUI {
                 navService.CenterOn(timestamp);
             else
                 navService.MoveTo(timestamp);
-        }
 
+            // Pokud znacka jiz existuje, pouze zmenime X
+            if (matchLine != null) {
+                matchLine.X = timestamp;
+            } else {
+                matchLine = plot.Plot.Add.VerticalLine(timestamp);
+                matchLine.Color = new ScottPlot.Color(255, 0, 0, 128); // pruhledna cervena
+                matchLine.LineWidth = 2;
+            }
+
+            plot.Refresh();
+        }
 
         private void NextResult_Click(object sender, RoutedEventArgs e) {
             if (activeAnalyzer is not ISearchableAnalyzer searchable || searchable.MatchCount == 0)
