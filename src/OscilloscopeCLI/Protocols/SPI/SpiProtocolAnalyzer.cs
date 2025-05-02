@@ -1,4 +1,5 @@
 using OscilloscopeCLI.Signal;
+using System.Diagnostics;
 
 namespace OscilloscopeCLI.Protocols;
 
@@ -40,8 +41,11 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     /// Provede analyzu SPI komunikace.
     /// </summary>
     public void Analyze() {
+        var globalWatch = Stopwatch.StartNew();
         DecodedBytes.Clear();
+        Console.WriteLine("[SPI] Zahájena analýza...");
 
+        var sw = Stopwatch.StartNew();
         var csAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.ChipSelect);
         var sclkAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Clock);
         var mosiAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Mosi);
@@ -50,18 +54,52 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         hasMiso = !string.IsNullOrEmpty(mapping.Miso) && signalData.ContainsKey(mapping.Miso);
         if (hasMiso)
             misoAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Miso!);
+        sw.Stop();
+        Console.WriteLine($"[SPI] Příprava analyzátorů trvala {sw.Elapsed.TotalMilliseconds:F2} ms");
 
+        sw.Restart();
         var activeTransfers = csAnalyzer.GetConstantLevelSegments().Where(seg => seg.Value == 0).ToList();
+        sw.Stop();
+        Console.WriteLine($"[SPI] Detekce přenosů (CS LOW) trvala {sw.Elapsed.TotalMilliseconds:F2} ms");
+
+        sw.Restart();
         var sclkEdges = sclkAnalyzer.DetectTransitions().Where(t => {
             if (!settings.Cpha)
                 return settings.Cpol ? t.From == 1 && t.To == 0 : t.From == 0 && t.To == 1;
             else
                 return settings.Cpol ? t.From == 0 && t.To == 1 : t.From == 1 && t.To == 0;
         }).ToList();
+        sw.Stop();
+        Console.WriteLine($"[SPI] Detekce hran SCLK trvala {sw.Elapsed.TotalMilliseconds:F2} ms");
+
+        Console.WriteLine($"[SPI] Detekováno {activeTransfers.Count} přenosů (CS aktivní).");
+        Console.WriteLine($"[SPI] Celkem {sclkEdges.Count} relevantních hran SCLK pro dekódování.");
+
+        sw.Restart();
+        int edgeIndex = 0;
+        var mosiReader = new SignalReader(mosiAnalyzer.GetSamples());
+        SignalReader? misoReader = hasMiso && misoAnalyzer != null ? new SignalReader(misoAnalyzer.GetSamples()) : null;
 
         foreach (var transfer in activeTransfers) {
-            AnalyzeTransfer(transfer.StartTime, transfer.EndTime, sclkEdges, mosiAnalyzer, misoAnalyzer);
+            var edges = new List<DigitalTransition>();
+
+            while (edgeIndex < sclkEdges.Count && sclkEdges[edgeIndex].Time < transfer.StartTime)
+                edgeIndex++;
+
+            int localEdgeStart = edgeIndex;
+            while (edgeIndex < sclkEdges.Count && sclkEdges[edgeIndex].Time <= transfer.EndTime) {
+                edges.Add(sclkEdges[edgeIndex]);
+                edgeIndex++;
+            }
+
+            AnalyzeTransfer(edges, mosiReader, misoReader, transfer.StartTime, transfer.EndTime);
         }
+                sw.Stop();
+        Console.WriteLine($"[SPI] Dekódování všech přenosů trvalo {sw.Elapsed.TotalMilliseconds:F2} ms");
+
+        globalWatch.Stop();
+        Console.WriteLine($"[SPI] Analýza dokončena za {globalWatch.Elapsed.TotalMilliseconds:F2} ms.");
+        Console.WriteLine($"[SPI] Dekódováno {DecodedBytes.Count} bajtů.");
     }
 
     private static Dictionary<string, List<Tuple<double, double>>> ConvertToTuple(Dictionary<string, List<(double Time, double Value)>> source) {
@@ -74,25 +112,14 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     /// <summary>
     /// Analyzuje jednotlive SPI prenosy v ramci jednoho CS aktivniho segmentu.
     /// </summary>
-    private void AnalyzeTransfer(double startTime, double endTime, List<DigitalTransition> sclkEdges, DigitalSignalAnalyzer mosiAnalyzer, DigitalSignalAnalyzer? misoAnalyzer) {
-        var edgesInTransfer = sclkEdges.Where(e => e.Time >= startTime && e.Time <= endTime).ToList();
+    private void AnalyzeTransfer(List<DigitalTransition> edges, SignalReader mosiReader, SignalReader? misoReader, double startTime, double endTime) {
         var bitsMosi = new List<bool>();
         var bitsMiso = new List<bool>();
 
-        if (edgesInTransfer.Count == 0) {
-            DecodedBytes.Add(new SpiDecodedByte {
-                Timestamp = startTime,
-                ValueMOSI = 0,
-                ValueMISO = 0,
-                Error = "příliš krátký přenos (žádné hrany SCLK)"
-            });
-            return;
-        }
-
-        foreach (var edge in edgesInTransfer) {
-            bitsMosi.Add(GetBitAtTime(mosiAnalyzer.GetSamples(), edge.Time));
-            if (hasMiso && misoAnalyzer != null)
-                bitsMiso.Add(GetBitAtTime(misoAnalyzer.GetSamples(), edge.Time));
+        foreach (var edge in edges) {
+            bitsMosi.Add(mosiReader.GetStateAt(edge.Time));
+            if (hasMiso && misoReader != null)
+                bitsMiso.Add(misoReader.GetStateAt(edge.Time));
 
             if (bitsMosi.Count == settings.BitsPerWord) {
                 DecodedBytes.Add(new SpiDecodedByte {
@@ -115,28 +142,15 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
             });
         }
 
-        if (edgesInTransfer.Count != settings.BitsPerWord && bitsMosi.Count == 0) {
+        if (edges.Count != settings.BitsPerWord && bitsMosi.Count == 0) {
             DecodedBytes.Add(new SpiDecodedByte {
                 Timestamp = endTime,
                 ValueMOSI = 0,
                 ValueMISO = 0,
-                Error = $"nesoulad počtu hran ({edgesInTransfer.Count}) a očekávaných bitů ({settings.BitsPerWord})"
+                Error = $"nesoulad počtu hran ({edges.Count}) a očekávaných bitů ({settings.BitsPerWord})"
             });
         }
     }
-
-
-    /// <summary>
-    /// Vrati stav signalu v danem case.
-    /// </summary>
-    private bool GetBitAtTime(List<(double Timestamp, bool State)> samples, double time) {
-        for (int i = 1; i < samples.Count; i++) {
-            if (samples[i].Timestamp >= time)
-                return samples[i - 1].State;
-        }
-        return samples[^1].State;
-    }
-
 
     /// <summary>
     /// Prevede seznam bitu (LSB first) na bajt.
