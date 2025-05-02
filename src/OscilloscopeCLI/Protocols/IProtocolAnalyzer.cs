@@ -9,7 +9,7 @@ namespace OscilloscopeCLI.Protocols {
         string ProtocolName { get; }
 
         /// <summary>
-        /// Metoda pro provedení analyzy signalu podle daneho protokolu.
+        /// Metoda pro provedení analýzy signálu podle daného protokolu.
         /// </summary>
         void Analyze();
     }

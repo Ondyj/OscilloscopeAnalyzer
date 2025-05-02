@@ -1,4 +1,5 @@
 using OscilloscopeCLI.Signal;
+using System.Diagnostics;
 
 namespace OscilloscopeCLI.Protocols;
 
@@ -37,15 +38,23 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
         DecodedBytes.Clear();
         if (channelSamples.Count == 0) return;
 
+        Console.WriteLine("[UART] Zahajeni analyzy...");
+        Stopwatch stopwatch = Stopwatch.StartNew();
+
+
         double bitTime = 1.0 / settings.BaudRate;
         bool idleLevel = settings.IdleLevelHigh;
 
         foreach (var (channelName, samples) in channelSamples) {
+            Stopwatch channelWatch = Stopwatch.StartNew();
             AnalyzeChannel(channelName, samples, bitTime, idleLevel);
+            channelWatch.Stop();
         }
 
         matchSearcher = new UartMatchSearcher(DecodedBytes);
         exporter = new UartExporter(DecodedBytes);
+        stopwatch.Stop();
+    Console.WriteLine($"[UART] Analyza dokoncena za {stopwatch.Elapsed.TotalMilliseconds:F2} ms. Dekodovano {DecodedBytes.Count} bajtu.");
     }
 
     /// <summary>
@@ -104,11 +113,20 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     /// Zjisti hodnotu signalu v urcitem case.
     /// </summary>
     private bool GetBitAtTime(List<(double Timestamp, bool State)> samples, double timestamp) {
-        for (int i = 1; i < samples.Count; i++) {
-            if (samples[i].Timestamp >= timestamp)
-                return samples[i - 1].State;
+        int low = 0;
+        int high = samples.Count - 1;
+
+        while (low <= high) {
+            int mid = (low + high) / 2;
+            if (samples[mid].Timestamp < timestamp) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
         }
-        return samples[^1].State;
+
+        int index = Math.Max(0, low - 1);
+        return samples[index].State;
     }
 
     /// <summary>
