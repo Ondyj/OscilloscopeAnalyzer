@@ -6,14 +6,17 @@ namespace OscilloscopeCLI.Protocols;
 /// Trida pro export dekodovanych UART bajtu do CSV souboru.
 /// </summary>
 public class UartExporter {
-    private readonly List<UartDecodedByte> decodedBytes; // Seznam dekodovanych UART bajtu
+    private readonly List<UartDecodedByte> decodedBytes;
+    private readonly Dictionary<string, string>? channelRenameMap;
 
     /// <summary>
     /// Vytvori novou instanci tridy UartExporter.
     /// </summary>
     /// <param name="decodedBytes">Seznam dekodovanych bajtu k exportu.</param>
-    public UartExporter(List<UartDecodedByte> decodedBytes) {
+    /// <param name="channelRenameMap">Volitelna mapa prejmenovani kanalu (napr. CH0 → TX).</param>
+    public UartExporter(List<UartDecodedByte> decodedBytes, Dictionary<string, string>? channelRenameMap = null) {
         this.decodedBytes = decodedBytes;
+        this.channelRenameMap = channelRenameMap;
     }
 
     /// <summary>
@@ -26,14 +29,17 @@ public class UartExporter {
 
         foreach (var b in decodedBytes) {
             string timestamp = b.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
-            string channel = b.Channel ?? "Unknown";
+            string originalChannel = b.Channel ?? "Unknown";
+            string renamedChannel = channelRenameMap != null && channelRenameMap.ContainsKey(originalChannel)
+                ? channelRenameMap[originalChannel]
+                : originalChannel;
             string hex = $"0x{b.Value:X2}";
             string ascii = (b.Value >= 32 && b.Value <= 126)
                 ? ((char)b.Value).ToString()
                 : $"\\x{b.Value:X2}";
             string error = b.Error ?? "";
 
-            writer.WriteLine($"{timestamp};{channel};{hex};{ascii};{error}");
+            writer.WriteLine($"{timestamp};{renamedChannel};{hex};{ascii};{error}");
         }
     }
 }

@@ -8,6 +8,7 @@ namespace OscilloscopeCLI.Protocols;
 /// </summary>
 public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExportableAnalyzer {
     private readonly Dictionary<string, List<(double Timestamp, bool State)>> channelSamples;  // Vstupni signalova data (timestamp, logicka hodnota)
+    private Dictionary<string, string>? channelRenameMap;
     private readonly UartSettings settings; // Nastaveni UART analyzy (baud rate, data bits, parita, stop bity, idle uroven)
     public List<UartDecodedByte> DecodedBytes { get; private set; } = new(); // Seznam dekodovanych bajtu
     public string ProtocolName => "UART"; // Nazev analyzovaneho protokolu
@@ -20,8 +21,9 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     /// </summary>
     /// <param name="signalData">Signalova data.</param>
     /// <param name="settings">Nastaveni UART analyzatoru.</param>
-    public UartProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, UartSettings settings) {
+    public UartProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, UartSettings settings, Dictionary<string, string>? renameMap = null) {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        this.channelRenameMap = renameMap;
         this.channelSamples = signalData.ToDictionary(
             kvp => kvp.Key,
             kvp => kvp.Value.Select(p => (p.Time, p.Value > 0.5)).ToList()
@@ -29,6 +31,11 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
 
         matchSearcher = new UartMatchSearcher(DecodedBytes);
         exporter = new UartExporter(DecodedBytes);
+    }
+
+    public void SetChannelRenameMap(Dictionary<string, string> renameMap) {
+        channelRenameMap = renameMap;
+        exporter = new UartExporter(DecodedBytes, channelRenameMap); // obnovit exporter
     }
 
     /// <summary>
@@ -52,7 +59,7 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
         }
 
         matchSearcher = new UartMatchSearcher(DecodedBytes);
-        exporter = new UartExporter(DecodedBytes);
+        exporter = new UartExporter(DecodedBytes, channelRenameMap);
         stopwatch.Stop();
     Console.WriteLine($"[UART] Analyza dokoncena za {stopwatch.Elapsed.TotalMilliseconds:F2} ms. Dekodovano {DecodedBytes.Count} bajtu.");
     }

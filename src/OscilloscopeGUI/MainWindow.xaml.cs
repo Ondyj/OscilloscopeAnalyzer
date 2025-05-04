@@ -28,6 +28,7 @@ namespace OscilloscopeGUI {
         private int currentMatchIndex = 0;
         private byte? searchedValue = null;
         private ScottPlot.Plottables.VerticalLine? matchLine = null;
+        private Dictionary<string, string>? uartChannelRenameMap = null;
 
         private SpiChannelMapping? lastUsedSpiMapping = null;
         private string? loadedFilePath = null;
@@ -163,13 +164,22 @@ namespace OscilloscopeGUI {
                     plotter.RenameChannels(renameMap);
                 }
 
+                if (selectedProtocol == "UART") {
+                    var uartMapDialog = new UartChannelMappingDialog(loader.SignalData.Keys.ToList());
+                    uartMapDialog.Owner = this;
+                    if (uartMapDialog.ShowDialog() != true)
+                        return;
+
+                    uartChannelRenameMap = uartMapDialog.ChannelRenames;
+
+                    plotter.RenameChannels(uartChannelRenameMap);
+                }
                 // Inicializace analyzeru podle zvoleneho protokolu
                 switch (selectedProtocol) {
                     case "SPI":
                         var inferredSettings = SpiInferenceHelper.InferSettings(loader.SignalData);
                         activeAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, inferredSettings, lastUsedSpiMapping!);
                         break;
-                    // TODO: Doplnit UART, I2C, ...
                 }
             }
             catch (Exception ex) {
@@ -177,15 +187,6 @@ namespace OscilloscopeGUI {
                 progressDialog.Finish($"Chyba pri nacitani: {ex.Message}", autoClose: false);
                 progressDialog.OnOkClicked = () => progressDialog.Close();
             }
-        }
-
-
-        /// <summary>
-        /// Asynchronne vykresli vsechny signaly pomoci tridy SignalPlotter
-        /// </summary>
-        private async Task PlotSignalGraphAsync() {
-            await plotter.PlotSignalsAsync(loader.SignalData); // SignalPlotter
-            navService.ResetView(plotter.EarliestTime);
         }
 
         /// <summary>
@@ -341,7 +342,7 @@ namespace OscilloscopeGUI {
                             }
                         }
 
-                        activeAnalyzer = new UartProtocolAnalyzer(loader.SignalData, uartSettings);
+                        activeAnalyzer = new UartProtocolAnalyzer(loader.SignalData, uartSettings, uartChannelRenameMap);
                         break;
 
                         case "SPI":
