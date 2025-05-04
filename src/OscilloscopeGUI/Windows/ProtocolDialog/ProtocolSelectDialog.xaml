@@ -19,7 +19,6 @@
         <ComboBox x:Name="ProtocolCombo" Grid.Row="1" SelectedIndex="0" Height="25">
             <ComboBoxItem Content="SPI" />
             <ComboBoxItem Content="UART" />
-            <ComboBoxItem Content="I2C" />
         </ComboBox>
 
         <Button Grid.Row="2" Content="OK" Width="80" Height="30" Margin="0,15,0,0" HorizontalAlignment="Right" Click="Ok_Click"/>
