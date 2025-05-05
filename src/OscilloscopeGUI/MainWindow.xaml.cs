@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Windows;
-using Microsoft.Win32;
-using ScottPlot;
-using ScottPlot.WPF;
+﻿using System.Windows;
 using OscilloscopeCLI.Signal;
 using System.Windows.Controls;
 using OscilloscopeCLI.Protocols;
@@ -12,49 +6,47 @@ using OscilloscopeGUI.Plotting;
 using OscilloscopeGUI.Services;
 using System.Windows.Input;
 using System.Runtime.InteropServices;
-using System.Globalization;
 using System.Windows.Media;
-using System.IO;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
-        private SignalLoader loader = new SignalLoader(); // Ulozeni dat do tridy
-        private SignalPlotter plotter;
-        private SignalFileService fileService = new SignalFileService();
-        private PlotNavigationService navService;
-        private bool isDragging = false;
-        private Point lastMousePosition;
-        private IProtocolAnalyzer? activeAnalyzer;
-        private int currentMatchIndex = 0;
-        private byte? searchedValue = null;
-        private ScottPlot.Plottables.VerticalLine? matchLine = null;
-        private Dictionary<string, string>? uartChannelRenameMap = null;
-
-        private SpiChannelMapping? lastUsedSpiMapping = null;
-        private string? loadedFilePath = null;
-
+        private SignalLoader loader = new SignalLoader(); // nacita data ze souboru CSV
+        private SignalPlotter plotter; // zodpovida za vykreslovani signalu
+        private PlotNavigationService navService; // ovladani zoomu a posunu v grafu
+        private SearchService searchService; // vyhledavani v analyzovanych datech
+        private FileLoadingService fileLoadingService = new FileLoadingService(); // nacitani CSV souboru s dialogem a pokrokem
+        private ProtocolAnalysisService protocolAnalysisService = new ProtocolAnalysisService(); // analyza podle vybraneho protokolu
+        private ExportService exportService = new ExportService(); // export vysledku analyzy do CSV
+        private bool isDragging = false; // priznak, zda uzivatel prave posouva graf
+        private Point lastMousePosition; // posledni pozice mysi pri posunu
+        private IProtocolAnalyzer? activeAnalyzer; // aktualne pouzivany analyzer protokolu
+        private Dictionary<string, string>? uartChannelRenameMap = null; // mapovani puvodnich nazvu kanalu na popisne nazvy pro UART
+        private SpiChannelMapping? lastUsedSpiMapping = null; // naposledy pouzite mapovani SPI kanalu
+        private string? loadedFilePath = null; // cesta k nactenemu CSV souboru     
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool AllocConsole();
 
+        /// <summary>
+        /// Konstruktor hlavniho okna aplikace
+        /// </summary>
         public MainWindow() {
-            AllocConsole(); // Otevreni konzole pro debug vypisy
-
+            AllocConsole();
             InitializeComponent();
 
-            plot.UserInputProcessor.Disable(); // zakazani cyhovzi chovani
-
-            this.KeyDown += MainWindow_KeyDown; // Pripojeni obsluhy klavesnice
-
+            plot.UserInputProcessor.Disable();
+            this.KeyDown += MainWindow_KeyDown;
             this.MouseWheel += MainWindow_MouseWheel;
 
-            plotter = new SignalPlotter(plot); // Inicializace tridy pro vykreslovani
+            plotter = new SignalPlotter(plot);
             navService = new PlotNavigationService(plot);
+            searchService = new SearchService(plot, navService);
+            searchService.AttachUi(ResultInfo, ResultNavigationPanel);
 
             plot.MouseDown += (s, e) => {
                 if (e.ChangedButton == MouseButton.Middle) {
-                    navService.ResetView(plotter.EarliestTime);  // zavolani resetu kamery
+                    navService.ResetView(plotter.EarliestTime);
                     e.Handled = true;
                 }
             };
@@ -62,12 +54,12 @@ namespace OscilloscopeGUI {
             plot.MouseLeftButtonDown += (s, e) => {
                 isDragging = true;
                 lastMousePosition = e.GetPosition(plot);
-                plot.CaptureMouse(); // zachytime mys
+                plot.CaptureMouse();
             };
 
             plot.MouseLeftButtonUp += (s, e) => {
                 isDragging = false;
-                plot.ReleaseMouseCapture(); // uvolnime mys
+                plot.ReleaseMouseCapture();
             };
 
             plot.MouseMove += (s, e) => {
@@ -81,148 +73,37 @@ namespace OscilloscopeGUI {
         }
 
         /// <summary>
-        /// Handler pro kliknuti na tlacitko "Nacist CSV"
-        /// </summary>
-        private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
-            var cts = new CancellationTokenSource();
-
-            // Vyber CSV souboru
-            OpenFileDialog openFileDialog = new OpenFileDialog {
-                Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
-            };
-
-            if (openFileDialog.ShowDialog() != true)
-                return;
-
-            ResetState();
-
-            loadedFilePath = openFileDialog.FileName;
-
-            // Zobrazeni progress dialogu
-            var progressDialog = new ProgressDialog();
-            progressDialog.Show();
-            var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
-            progressDialog.OnCanceled = () => cts.Cancel();
-
-            try {
-                // Nacitani CSV
-                bool success = await Task.Run(() => {
-                    loader.LoadCsvFile(openFileDialog.FileName, progress, cts.Token);
-                    return loader.SignalData.Count > 0;
-                }, cts.Token);
-
-                if (cts.IsCancellationRequested) {
-                    progressDialog.Finish("Nacitani bylo zruseno uzivatelem.", autoClose: false);
-                    progressDialog.OnOkClicked = () => progressDialog.Close();
-                    return;
-                }
-
-                if (!success) {
-                    progressDialog.SetErrorState();
-                    progressDialog.Finish("Nacitani selhalo nebo byl nacten poskozeny soubor.", autoClose: false);
-                    progressDialog.OnOkClicked = () => progressDialog.Close();
-                    return;
-                }
-
-                // Vykresleni
-                progressDialog.SetTitle("Vykreslování...");
-                progressDialog.SetPhase("Vykreslování");
-                progressDialog.ReportMessage("Vykreslování signálu...");
-
-                await plotter.PlotSignalsAsync(loader.SignalData, progress);
-                navService.ResetView(plotter.EarliestTime);
-
-                progressDialog.Finish("Vykreslovani dokonceno.", autoClose: true);
-                progressDialog.OnOkClicked = () => progressDialog.Close();
-
-                // Vyber protokolu (napr. pomocí vlastního dialogu)
-                var protocolDialog = new ProtocolSelectDialog(loader.SignalData.Count);
-                protocolDialog.Owner = this;
-                if (protocolDialog.ShowDialog() != true)
-                    return;
-
-                string selectedProtocol = protocolDialog.SelectedProtocol;
-
-                // Mapovani SPI
-                if (selectedProtocol == "SPI") {
-                    var spiMapDialog = new SpiChannelMappingDialog(loader.SignalData.Keys.ToList());
-                    spiMapDialog.Owner = this;
-                    if (spiMapDialog.ShowDialog() != true)
-                        return;
-
-                    lastUsedSpiMapping = spiMapDialog.Mapping;
-
-                    // Prejmenovani legendy
-                    var renameMap = new Dictionary<string, string> {
-                        { lastUsedSpiMapping.ChipSelect, "CS" },
-                        { lastUsedSpiMapping.Clock, "SCLK" },
-                        { lastUsedSpiMapping.Mosi, "MOSI" }
-                    };
-                    if (!string.IsNullOrEmpty(lastUsedSpiMapping.Miso))
-                        renameMap[lastUsedSpiMapping.Miso] = "MISO";
-
-                    plotter.RenameChannels(renameMap);
-                }
-
-                if (selectedProtocol == "UART") {
-                    var uartMapDialog = new UartChannelMappingDialog(loader.SignalData.Keys.ToList());
-                    uartMapDialog.Owner = this;
-                    if (uartMapDialog.ShowDialog() != true)
-                        return;
-
-                    uartChannelRenameMap = uartMapDialog.ChannelRenames;
-
-                    plotter.RenameChannels(uartChannelRenameMap);
-                }
-                // Inicializace analyzeru podle zvoleneho protokolu
-                switch (selectedProtocol) {
-                    case "SPI":
-                        var inferredSettings = SpiInferenceHelper.InferSettings(loader.SignalData);
-                        activeAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, inferredSettings, lastUsedSpiMapping!);
-                        break;
-                }
-            }
-            catch (Exception ex) {
-                progressDialog.SetErrorState();
-                progressDialog.Finish($"Chyba pri nacitani: {ex.Message}", autoClose: false);
-                progressDialog.OnOkClicked = () => progressDialog.Close();
-            }
-        }
-
-        /// <summary>
-        /// Obsluha klavesovych vstupu pro ovladani zoomu a prochazeni vysledku
+        /// Zpracuje stisk klavesnice pro navigaci a vyhledavani
         /// </summary>
         private void MainWindow_KeyDown(object sender, KeyEventArgs e) {
-            if (activeAnalyzer is ISearchableAnalyzer searchable && searchable.HasMatches()) {
-                if (e.Key == Key.Left) {
-                    PrevResult_Click(sender, e);
-                    e.Handled = true;
-                    return;
-                }
-                if (e.Key == Key.Right) {
-                    NextResult_Click(sender, e);
-                    e.Handled = true;
-                    return;
-                }
+            if (e.Key == Key.Left) {
+                searchService.PreviousMatch();
+                e.Handled = true;
+                return;
             }
-
+            if (e.Key == Key.Right) {
+                searchService.NextMatch();
+                e.Handled = true;
+                return;
+            }
             if (e.Key == Key.Up || e.Key == Key.Down) {
                 navService.HandleKey(e.Key);
                 e.Handled = true;
                 return;
             }
-
-            navService.HandleKey(e.Key); // normalni zoom a posun
+            navService.HandleKey(e.Key);
         }
 
-
         /// <summary>
-        /// Obsluha pohybu kolecka mysi pro zoom
+        /// Zpracuje pohyb kolecka mysi pro zoom grafu
         /// </summary>
-        private void MainWindow_MouseWheel(object sender, MouseWheelEventArgs e){
+        private void MainWindow_MouseWheel(object sender, MouseWheelEventArgs e) {
             navService.HandleMouseWheel(e);
         }
 
+        /// <summary>
+        /// Zpracuje stisk klavesy Enter ve vyhledavacim poli
+        /// </summary>
         private void SearchBox_KeyDown(object sender, KeyEventArgs e) {
             if (e.Key == Key.Enter) {
                 SearchButton_Click(sender, e);
@@ -230,175 +111,104 @@ namespace OscilloscopeGUI {
             }
         }
 
+        /// <summary>
+        /// Nacte CSV soubor, vykresli signal a provede mapovani kanalu podle zvoleneho protokolu
+        /// </summary>
+        private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
+            ResetState();
 
-        private void SearchButton_Click(object sender, RoutedEventArgs e) {
-            if (activeAnalyzer is not ISearchableAnalyzer searchable) {
-                MessageBox.Show("Aktivní analyzátor nepodporuje vyhledávání.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+            var result = await fileLoadingService.LoadCsvAsync(loader, this);
+
+            if (!result.Success)
                 return;
+
+            loadedFilePath = result.FilePath;
+
+            var progressDialog = new ProgressDialog();
+            progressDialog.Owner = this;
+            progressDialog.Show();
+
+            progressDialog.SetTitle("Vykreslování...");
+            progressDialog.SetPhase("Vykreslování");
+            progressDialog.ReportMessage("Vykreslování signálu...");
+
+            var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
+            await plotter.PlotSignalsAsync(loader.SignalData, progress);
+            navService.ResetView(plotter.EarliestTime);
+
+            progressDialog.Finish("Vykreslování dokončeno.", autoClose: true);
+            progressDialog.OnOkClicked = () => progressDialog.Close();
+
+            var protocolDialog = new ProtocolSelectDialog(loader.SignalData.Count);
+            protocolDialog.Owner = this;
+            if (protocolDialog.ShowDialog() != true)
+                return;
+
+            string selectedProtocol = protocolDialog.SelectedProtocol;
+
+            if (selectedProtocol == "SPI") {
+                var spiMapDialog = new SpiChannelMappingDialog(loader.SignalData.Keys.ToList());
+                spiMapDialog.Owner = this;
+                if (spiMapDialog.ShowDialog() != true)
+                    return;
+
+                lastUsedSpiMapping = spiMapDialog.Mapping;
+
+                var renameMap = new Dictionary<string, string> {
+                    { lastUsedSpiMapping.ChipSelect, "CS" },
+                    { lastUsedSpiMapping.Clock, "SCLK" },
+                    { lastUsedSpiMapping.Mosi, "MOSI" }
+                };
+                if (!string.IsNullOrEmpty(lastUsedSpiMapping.Miso))
+                    renameMap[lastUsedSpiMapping.Miso] = "MISO";
+
+                plotter.RenameChannels(renameMap);
             }
 
-            string query = SearchBox.Text.Trim();
-            if (!byte.TryParse(query, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte value)) {
-                MessageBox.Show("Neplatný hexadecimální vstup. Zadejte např. 'A5'", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
+            if (selectedProtocol == "UART") {
+                var uartMapDialog = new UartChannelMappingDialog(loader.SignalData.Keys.ToList());
+                uartMapDialog.Owner = this;
+                if (uartMapDialog.ShowDialog() != true)
+                    return;
+
+                uartChannelRenameMap = uartMapDialog.ChannelRenames;
+                plotter.RenameChannels(uartChannelRenameMap);
             }
-
-            searchedValue = value;
-            searchable.Search(value);
-
-            if (searchable.HasMatches()) {
-                currentMatchIndex = 0;
-                ShowMatch();
-                ResultNavigationPanel.Visibility = Visibility.Visible;
-            } else {
-                MessageBox.Show($"Hodnota 0x{value:X2} nebyla nalezena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
-                ResultNavigationPanel.Visibility = Visibility.Collapsed;
-            }
-        }
-
-
-        private void ShowMatch() {
-            if (activeAnalyzer is not ISearchableAnalyzer searchable || searchedValue == null)
-                return;
-
-            if (searchable.MatchCount == 0)
-                return;
-
-            ResultInfo.Text = searchable.GetMatchDisplay(currentMatchIndex);
-            double timestamp = searchable.GetMatchTimestamp(currentMatchIndex);
-
-            navService.MoveTo(timestamp);
-
-            // Pokud znacka jiz existuje, pouze zmenime X
-            if (matchLine != null) {
-                matchLine.X = timestamp;
-            } else {
-                matchLine = plot.Plot.Add.VerticalLine(timestamp);
-                matchLine.Color = new ScottPlot.Color(255, 0, 0, 128); // pruhledna cervena
-                matchLine.LineWidth = 2;
-            }
-
-            plot.Refresh();
-        }
-
-        private void NextResult_Click(object sender, RoutedEventArgs e) {
-            if (activeAnalyzer is not ISearchableAnalyzer searchable || searchable.MatchCount == 0)
-                return;
-
-            currentMatchIndex = (currentMatchIndex + 1) % searchable.MatchCount;
-            ShowMatch();
-        }
-
-        private void PrevResult_Click(object sender, RoutedEventArgs e) {
-            if (activeAnalyzer is not ISearchableAnalyzer searchable || searchable.MatchCount == 0)
-                return;
-
-            currentMatchIndex = (currentMatchIndex - 1 + searchable.MatchCount) % searchable.MatchCount;
-            ShowMatch();
         }
 
         /// <summary>
-        /// Handler pro kliknuti na tlacitko "Analyzovat"
+        /// Spusti analyzu signalu podle zvoleneho protokolu
         /// </summary>
         private void AnalyzeButton_Click(object sender, RoutedEventArgs e) {
-            if (loader.SignalData.Count == 0) {
-                MessageBox.Show("Neni nacten zadny signal.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
             string selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "";
             bool isManual = ManualRadio.IsChecked == true;
-            int channelCount = loader.SignalData.Count;
 
-            if (!CheckChannelCount(selectedProtocol, channelCount)) {
+            if (!CheckChannelCount(selectedProtocol, loader.SignalData.Count))
                 return;
-            }
 
-            try {
-                switch (selectedProtocol) {
-                    case "UART":
-                        UartSettings uartSettings;
-                        if (isManual) { // Pokud je manualni rezim, zobraz dialog a nacti nastaveni
-                            var dialog = new UartSettingsDialog();
-                            if (dialog.ShowDialog() != true) return;
-                            uartSettings = dialog.Settings;
-                        } else { // Automaticka detekce nastaveni ze singnalu
-                            try {
-                                var rawSamples = loader.SignalData.Values.FirstOrDefault();
-                                if (rawSamples == null || rawSamples.Count == 0) {
-                                    MessageBox.Show("Nebyly nalezeny žádné signály pro automatickou detekci.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
-                                    return;
-                                }
+            var analyzer = protocolAnalysisService.Analyze(
+                selectedProtocol,
+                isManual,
+                loader,
+                uartChannelRenameMap,
+                ref lastUsedSpiMapping,
+                this
+            );
 
-                                var signalSamples = rawSamples.Select(t => new SignalSample(t.Item1, t.Item2 > 0.5)).ToList();
-                                // Automaticky odhad nastaveni UART:
-                                // - Spocita cas mezi zmenami stavu (hranami) => odhadne delku jednoho bitu => vypocita BaudRate.
-                                // - Urci, zda je linka v klidu ve stavu HIGH nebo LOW (IdleLevelHigh).
-                                // - Tyto data jsou nastaveny pevne DataBits = 8, Parity = None, StopBits = 1
-                                uartSettings = UartInferenceHelper.InferUartSettings(signalSamples);
-                            } catch (Exception ex) {
-                                MessageBox.Show($"Nepodařilo se odhadnout nastavení UART: {ex.Message}", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
-                                return;
-                            }
-                        }
-
-                        activeAnalyzer = new UartProtocolAnalyzer(loader.SignalData, uartSettings, uartChannelRenameMap);
-                        break;
-
-                        case "SPI":
-                            SpiSettings spiSettings;
-
-                            if (isManual) {
-                                var dialog = new SpiSettingsDialog();
-                                if (dialog.ShowDialog() != true) return;
-                                spiSettings = dialog.Settings;
-                            } else {
-                                try {
-                                    spiSettings = SpiInferenceHelper.InferSettings(loader.SignalData);
-                                } catch (Exception ex) {
-                                    MessageBox.Show($"Nepodařilo se odhadnout nastavení SPI: {ex.Message}",
-                                        "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
-                                    return;
-                                }
-                            }
-
-                            // Pokud už máme uložené mapování z LoadCsv_Click, použijeme ho
-                            if (lastUsedSpiMapping == null) {
-                                var mapDialog = new SpiChannelMappingDialog(loader.SignalData.Keys.ToList());
-                                if (mapDialog.ShowDialog() != true) return;
-                                lastUsedSpiMapping = mapDialog.Mapping;
-                            }
-
-                            activeAnalyzer = new SpiProtocolAnalyzer(loader.SignalData, spiSettings, lastUsedSpiMapping);
-                            break;
-
-                    case "I2C":
-                        //TODO
-                        //activeAnalyzer = new I2cProtocolAnalyzer(loader.SignalData);
-                        break;
-
-                    default:
-                        MessageBox.Show("Neni vybran platny protokol.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        return;
-                }
-
-                if (activeAnalyzer != null) {
-                    activeAnalyzer.Analyze();
-                    MessageBox.Show($"{activeAnalyzer.ProtocolName} analyza dokoncena.", "Vysledek", MessageBoxButton.OK, MessageBoxImage.Information);
-                } else {
-                    MessageBox.Show("Analyzer nebyl vytvoren.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
-            }
-            catch (Exception ex) {
-                MessageBox.Show($"Chyba pri analyze: {ex.Message}", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (analyzer != null) {
+                analyzer.Analyze();
+                SetAnalyzer(analyzer);
+                MessageBox.Show($"{analyzer.ProtocolName} analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
+        /// <summary>
+        /// Overi, zda je pro dany protokol k dispozici dostatek kanalu
+        /// </summary>
         private bool CheckChannelCount(string protocol, int channelCount) {
             int requiredChannels = protocol switch {
                 "UART" => 1,
                 "SPI" => 3,
-                "I2C" => 2,
                 _ => 0
             };
 
@@ -407,84 +217,58 @@ namespace OscilloscopeGUI {
             }
 
             if (channelCount < requiredChannels) {
-                MessageBox.Show($"Pro analyzu {protocol} je potreba alespon {requiredChannels} kanaly.", 
-                    "Nedostatecny pocet kanalu", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show($"Pro analýzu {protocol} je potřeba alespoň {requiredChannels} kanály.", 
+                    "Nedostatečný počet kanálů", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
 
             return true;
         }
 
+        /// <summary>
+        /// Provede export vysledku analyzy do CSV souboru
+        /// </summary>
         private void ExportResultsButton_Click(object sender, RoutedEventArgs e) {
-            if (activeAnalyzer is not IExportableAnalyzer exportable) {
-                MessageBox.Show("Aktivní analyzátor nepodporuje export.", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (loadedFilePath == null) {
-                MessageBox.Show("Není k dispozici cesta k původnímu souboru.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-
-            string inputFileName = Path.GetFileNameWithoutExtension(loadedFilePath);
-            string outputDir = "Vysledky";
-            Directory.CreateDirectory(outputDir);
-
-            // Pridame parametry analyzy do nazvu souboru (napr. UART_9600_8N1)
-            string paramInfo = "";
-
-            if (activeAnalyzer is UartProtocolAnalyzer uart) {
-                var s = uart.Settings;
-                paramInfo = $"UART_{s.BaudRate}_{s.DataBits}{(s.Parity == Parity.None ? 'N' : s.Parity.ToString()[0])}{s.StopBits}";
-            } else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
-                var s = spi.Settings;
-                paramInfo = $"SPI_{s.BitsPerWord}b_{(s.Cpol ? "CPOL1" : "CPOL0")}_{(s.Cpha ? "CPHA1" : "CPHA0")}";
-            } else {
-                paramInfo = exportable.ProtocolName;
-            }
-
-            string outputFileName = $"{inputFileName}_{paramInfo}.csv";
-            string outputPath = GetUniqueFilePath(outputDir, outputFileName);
-
-            exportable.ExportResults(outputPath);
-
-            MessageBox.Show($"Výsledky byly exportovány do:\n{outputPath}", "Export dokončen", MessageBoxButton.OK, MessageBoxImage.Information);
+            exportService.Export(activeAnalyzer, loadedFilePath);
         }
 
-
-        private string GetUniqueFilePath(string directory, string baseFileName) {
-            string baseNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(baseFileName);
-            string extension = System.IO.Path.GetExtension(baseFileName);
-
-            string path = System.IO.Path.Combine(directory, baseFileName);
-            int counter = 2;
-
-            while (System.IO.File.Exists(path)) {
-                path = System.IO.Path.Combine(directory, $"{baseNameWithoutExtension}_{counter}{extension}");
-                counter++;
-            }
-
-            return path;
-        }
-
+        /// <summary>
+        /// Resetuje aplikaci do vychoziho stavu pred nactenim noveho souboru
+        /// </summary>
         private void ResetState() {
             activeAnalyzer = null;
-            currentMatchIndex = 0;
-            searchedValue = null;
 
             ResultNavigationPanel.Visibility = Visibility.Collapsed;
             ResultInfo.Text = "";
-
-            if (matchLine != null) {
-                plot.Plot.Remove(matchLine);
-                matchLine = null;
-            }
 
             plot.Plot.Clear();
             plot.Refresh();
         }
 
+        /// <summary>
+        /// Spusti vyhledavani v dekodovanych datech
+        /// </summary>
+        private void SearchButton_Click(object sender, RoutedEventArgs e) {
+            searchService.Search(SearchBox.Text.Trim());
+        }
 
+        /// <summary>
+        /// Preskoci na dalsi nalezeny vysledek
+        /// </summary>
+        private void NextResult_Click(object sender, RoutedEventArgs e) {
+            searchService.NextMatch();
+        }
+
+        /// <summary>
+        /// Preskoci na predchozi nalezeny vysledek
+        /// </summary>
+        private void PrevResult_Click(object sender, RoutedEventArgs e) {
+            searchService.PreviousMatch();
+        }
+
+        /// <summary>
+        /// Vymaze napovedni text ve vyhledavacim poli pri ziskani fokusu
+        /// </summary>
         private void SearchBox_GotFocus(object sender, RoutedEventArgs e) {
             if (SearchBox.Text == "např. FF") {
                 SearchBox.Text = "";
@@ -492,11 +276,25 @@ namespace OscilloscopeGUI {
             }
         }
 
+        /// <summary>
+        /// Obnovi napovedni text ve vyhledavacim poli pri ztrate fokusu
+        /// </summary>
         private void SearchBox_LostFocus(object sender, RoutedEventArgs e) {
             if (string.IsNullOrWhiteSpace(SearchBox.Text)) {
                 SearchBox.Text = "např. FF";
                 SearchBox.Foreground = new SolidColorBrush(System.Windows.Media.Colors.Gray);
             }
+        }
+
+        /// <summary>
+        /// Nastavi aktualni analyzator a zaregistruje ho pro vyhledavani
+        /// </summary>
+        private void SetAnalyzer(IProtocolAnalyzer analyzer) {
+            activeAnalyzer = analyzer;
+            if (analyzer is ISearchableAnalyzer searchable)
+                searchService.SetAnalyzer(searchable);
+            else
+                searchService.Reset();
         }
     }
 }

@@ -1,11 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using OscilloscopeGUI.Services;
-using ScottPlot;
 using ScottPlot.WPF;
-using System.Drawing;
 
 namespace OscilloscopeGUI.Plotting {
     /// <summary>
@@ -13,7 +6,6 @@ namespace OscilloscopeGUI.Plotting {
     /// </summary>
     public class SignalPlotter {
         private readonly WpfPlot plot;
-        private readonly PlotNavigationService navService;
         public double EarliestTime { get; private set; } = 0;
 
         /// <summary>
@@ -22,7 +14,6 @@ namespace OscilloscopeGUI.Plotting {
         /// <param name="plotControl">Instance grafu, do ktereho se bude vykreslovat</param>
         public SignalPlotter(WpfPlot plotControl) {
             plot = plotControl;
-            navService = new PlotNavigationService(plotControl);
         }
 
         /// <summary>
