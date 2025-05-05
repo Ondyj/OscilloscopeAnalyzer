@@ -68,6 +68,56 @@ namespace OscilloscopeGUI.Services {
                 return new CsvLoadResult { Success = false };
             }
         }
+        public (bool Success, string? FilePath) PromptForFileOnly(Window owner) {
+            var openFileDialog = new OpenFileDialog {
+                Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+            };
 
+            if (openFileDialog.ShowDialog(owner) != true)
+                return (false, null);
+
+            return (true, openFileDialog.FileName);
+        }
+
+        public async Task<CsvLoadResult> LoadFromFilePathAsync(SignalLoader loader, string filePath, Window owner) {
+            var cts = new CancellationTokenSource();
+            var progressDialog = new ProgressDialog {
+                Owner = owner
+            };
+            progressDialog.Show();
+            var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
+            progressDialog.OnCanceled = () => cts.Cancel();
+
+            try {
+                bool loaded = await Task.Run(() => {
+                    loader.LoadCsvFile(filePath, progress, cts.Token);
+                    return loader.SignalData.Count > 0;
+                }, cts.Token);
+
+                if (cts.IsCancellationRequested) {
+                    progressDialog.Finish("Načítání bylo zrušeno.", autoClose: false);
+                    progressDialog.OnOkClicked = () => progressDialog.Close();
+                    return new CsvLoadResult { Success = false };
+                }
+
+                if (!loaded) {
+                    progressDialog.SetErrorState();
+                    progressDialog.Finish("Soubor je prázdný nebo poškozený.", autoClose: false);
+                    progressDialog.OnOkClicked = () => progressDialog.Close();
+                    return new CsvLoadResult { Success = false };
+                }
+
+                progressDialog.Close();
+                return new CsvLoadResult {
+                    Success = true,
+                    FilePath = filePath
+                };
+            } catch (Exception ex) {
+                progressDialog.SetErrorState();
+                progressDialog.Finish($"Chyba při načítání: {ex.Message}", autoClose: false);
+                progressDialog.OnOkClicked = () => progressDialog.Close();
+                return new CsvLoadResult { Success = false };
+            }
+        }
     }
 }
