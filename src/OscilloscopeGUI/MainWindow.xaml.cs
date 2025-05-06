@@ -28,6 +28,11 @@ namespace OscilloscopeGUI {
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool AllocConsole();
 
+        private double? timeMark1 = null;
+        private double? timeMark2 = null;
+        private ScottPlot.Plottables.VerticalLine? line1 = null;
+        private ScottPlot.Plottables.VerticalLine? line2 = null;
+
         /// <summary>
         /// Konstruktor hlavniho okna aplikace
         /// </summary>
@@ -70,6 +75,8 @@ namespace OscilloscopeGUI {
                     lastMousePosition = currentPos;
                 }
             };
+
+            plot.MouseRightButtonDown += Plot_MouseRightButtonDown;
         }
 
         /// <summary>
@@ -313,6 +320,88 @@ namespace OscilloscopeGUI {
         }
 
         /// <summary>
+        /// Zpracuje kliknuti pravym tlacitkem a zmeri casovy rozdil mezi dvema body
+        /// </summary>
+        private void Plot_MouseRightButtonDown(object sender, MouseButtonEventArgs e) {
+            // Ziskani DPI obrazovky
+            var source = PresentationSource.FromVisual(this);
+            double dpiX = 1.0, dpiY = 1.0;
+            if (source != null) {
+                dpiX = source.CompositionTarget.TransformToDevice.M11;
+                dpiY = source.CompositionTarget.TransformToDevice.M22;
+            }
+
+            // Ziskani pozice mysi a uprava podle DPI
+            Point mousePos = e.GetPosition(plot);
+            double adjustedX = mousePos.X * dpiX;
+            double adjustedY = mousePos.Y * dpiY;
+
+            // Vytvoreni pixelu a prevod na souradnice grafu
+            var pixel = new ScottPlot.Pixel(adjustedX, adjustedY);
+            var coord = plot.Plot.GetCoordinates(pixel);
+            double t = coord.X;
+
+            if (!timeMark1.HasValue) {
+                timeMark1 = t;
+                line1 = plot.Plot.Add.VerticalLine(t);
+                line1.Color = new ScottPlot.Color(0, 150, 0);
+                line1.LineWidth = 2;
+                MeasurementInfo.Visibility = Visibility.Collapsed;
+            } else if (!timeMark2.HasValue) {
+                timeMark2 = t;
+                line2 = plot.Plot.Add.VerticalLine(t);
+                line2.Color = new ScottPlot.Color(0, 150, 0);
+                line2.LineWidth = 2;
+                ShowTimeDifference();
+            } else {
+                if (line1 != null) plot.Plot.Remove(line1);
+                if (line2 != null) plot.Plot.Remove(line2);
+                line1 = line2 = null;
+                timeMark1 = timeMark2 = null;
+                MeasurementInfo.Visibility = Visibility.Collapsed;
+            }
+
+            plot.Refresh();
+            e.Handled = true;
+        }
+
+        /// <summary>
+        /// Vypocita a zobrazi casovy rozdil mezi dvema body
+        /// </summary>
+        private void ShowTimeDifference() {
+            if (timeMark1.HasValue && timeMark2.HasValue) {
+                double delta = Math.Abs(timeMark2.Value - timeMark1.Value);
+
+                string formattedDelta;
+                if (delta >= 1)
+                    formattedDelta = $"{delta:F6} s";
+                else if (delta >= 1e-3)
+                    formattedDelta = $"{delta * 1e3:F3} ms";
+                else if (delta >= 1e-6)
+                    formattedDelta = $"{delta * 1e6:F3} µs";
+                else
+                    formattedDelta = $"{delta * 1e9:F3} ns";
+
+                MeasurementInfo.Text = $"{formattedDelta}";
+                MeasurementInfo.Visibility = Visibility.Visible;
+
+                // Vypocet stredu v case
+                double centerX = (timeMark1.Value + timeMark2.Value) / 2;
+
+                // Ziskani DPI transformace
+                var source = PresentationSource.FromVisual(this);
+                double dpiX = 1.0;
+                if (source != null)
+                    dpiX = source.CompositionTarget.TransformToDevice.M11;
+
+                // Prevadi stred na pixely a zarovna text doprostred
+                var pixel = plot.Plot.GetPixel(new ScottPlot.Coordinates(centerX, 0));
+                double pixelX = pixel.X / dpiX;
+                MeasurementInfo.Margin = new Thickness(pixelX - MeasurementInfo.ActualWidth / 2, 10, 0, 0);
+            }
+        }
+
+        /// <summary>
         /// Provede export vysledku analyzy do CSV souboru
         /// </summary>
         private void ExportResultsButton_Click(object sender, RoutedEventArgs e) {
@@ -327,6 +416,14 @@ namespace OscilloscopeGUI {
 
             ResultNavigationPanel.Visibility = Visibility.Collapsed;
             ResultInfo.Text = "";
+
+            timeMark1 = null;
+            timeMark2 = null;
+            line1 = null;
+            line2 = null;
+
+            MeasurementInfo.Text = "";
+            MeasurementInfo.Visibility = Visibility.Collapsed;
 
             plot.Plot.Clear();
             plot.Refresh();

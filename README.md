@@ -5,6 +5,7 @@
 - **Kolečko myši** – přiblížení / oddálení (alternativa klavesy **W** / **S** nebo **↑** / **↓**)
 - **Klik kolečkem** - resetuje zobrazení na výchozí stav
 - **Držení levého tlačítka myši + tažení** – horizontální posun grafu (alternativa klavesy **A** / **D**)
+- **Klik pravé tlačítko myši** – odměřování času
 - **Klavesy ← a →** - přesun na předchozí / následující nalezenou hodnotu při vyhledávání
 
 ## Analýza protokolů

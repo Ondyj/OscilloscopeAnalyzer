@@ -52,9 +52,20 @@
             <TextBlock x:Name="ResultInfo" Text="Výsledek" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="Bold"/>
         </StackPanel>
 
-        <!-- Graf (ScottPlot) zabira cele zbyvajici misto -->
-        <ScottPlot:WpfPlot Name="plot" Grid.Row="2" Margin="10"
-                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+        <!-- Graf + info text -->
+        <Grid Grid.Row="2" Margin="10">
+            <ScottPlot:WpfPlot Name="plot"/>
+
+            <!-- Mereni casu -->
+            <TextBlock x:Name="MeasurementInfo"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Left"
+                    Background="WhiteSmoke"
+                    FontWeight="Bold"
+                    Padding="5"
+                    Visibility="Collapsed"
+                    Panel.ZIndex="1"/>
+        </Grid>
     </Grid>
 
 </Window>
