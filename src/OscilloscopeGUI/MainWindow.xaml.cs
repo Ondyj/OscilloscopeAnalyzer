@@ -20,8 +20,8 @@ namespace OscilloscopeGUI {
         private bool isDragging = false; // priznak, zda uzivatel prave posouva graf
         private Point lastMousePosition; // posledni pozice mysi pri posunu
         private IProtocolAnalyzer? activeAnalyzer; // aktualne pouzivany analyzer protokolu
-        private Dictionary<string, string>? uartChannelRenameMap = null; // mapovani puvodnich nazvu kanalu na popisne nazvy pro UART
         private SpiChannelMapping? lastUsedSpiMapping = null; // naposledy pouzite mapovani SPI kanalu
+        private UartChannelMapping? lastUsedUartMapping = null;
         private string? loadedFilePath = null; // cesta k nactenemu CSV souboru     
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -123,28 +123,31 @@ namespace OscilloscopeGUI {
                 return;
 
             string selectedFilePath = filePick.FilePath!;
+
             ResetState();
 
-            // 2. Vyber protokolu
-            var protocolDialog = new ProtocolSelectDialog(4);
-            protocolDialog.Owner = this;
-            if (protocolDialog.ShowDialog() != true)
-                return;
 
-            string selectedProtocol = protocolDialog.SelectedProtocol;
-
-            // 3. Nacteni CSV souboru
+            // 2. Nacteni CSV souboru
             var loadResult = await fileLoadingService.LoadFromFilePathAsync(loader, selectedFilePath, this);
             if (!loadResult.Success)
                 return;
 
             loadedFilePath = selectedFilePath;
 
-            // 4. Ziskani aktivnich kanalu
+            // 3. Ziskani aktivnich kanalu
             var activeChannels = loader.GetRemainingChannelNames();
             Console.WriteLine("Aktivní kanály:");
             foreach (var ch in activeChannels)
                 Console.WriteLine(ch);
+
+            // 4. Vyber protokolu realny pocet kanalu
+            var protocolDialog = new ProtocolSelectDialog(activeChannels.Count) {
+                Owner = this
+            };
+            if (protocolDialog.ShowDialog() != true)
+                return;
+
+            string selectedProtocol = protocolDialog.SelectedProtocol;
 
             // 5. Mapovani podle protokolu
             Dictionary<string, string> renameMap = new();
@@ -176,9 +179,43 @@ namespace OscilloscopeGUI {
                 };
                 if (!string.IsNullOrEmpty(lastUsedSpiMapping.Miso))
                     renameMap[lastUsedSpiMapping.Miso] = "MISO";
+            } else if (selectedProtocol == "UART") {
+                var uartMapDialog = new UartChannelMappingDialog(activeChannels);
+                uartMapDialog.Owner = this;
+                if (uartMapDialog.ShowDialog() != true)
+                    return;
+
+                var mapping = uartMapDialog.ChannelRenames;
+                lastUsedUartMapping = new UartChannelMapping {
+                    Tx = mapping.FirstOrDefault(kv => kv.Value == "TX").Key ?? "",
+                    Rx = mapping.FirstOrDefault(kv => kv.Value == "RX").Key ?? ""
+                };
+
+                // podminka pro jednosmerne mapovani
+                if (mapping.Count > 1) {
+                    // jen pokud mám více než 1 přiřazenou roli, vyžaduji obě signály
+                    if (!lastUsedUartMapping.IsValid()) {
+                        MessageBox.Show(
+                            "Mapování UART signálů není validní (TX a RX musí být různé a neprázdné).",
+                            "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+                }
+                else if (mapping.Count == 0) {
+                    // pokud uživatel nevybral ani RX ani TX
+                    MessageBox.Show(
+                        "Musíte vybrat alespoň jednu roli (RX nebo TX).",
+                        "Neúplné mapování", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                // pokud mapping.Count == 1, bereme jednosměrné měření a nevoláme IsValid
+
+                renameMap = new Dictionary<string, string>();
+                foreach (var kv in mapping)
+                    renameMap[kv.Key] = kv.Value;
             }
 
-            // 6. Vykresleni signálu (s přejmenovanými klíči)
+            // 6. Vykresleni signalu (s prejmenovanymi klici)
             var progressDialog = new ProgressDialog {
                 Owner = this
             };
@@ -188,7 +225,7 @@ namespace OscilloscopeGUI {
             progressDialog.ReportMessage("Vykreslování signálu...");
             var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
 
-            // pokud existuje renameMap, vytvorime novy slovnik s prejmenovanymi klíči
+            // pokud existuje renameMap, vytvorime novy slovnik s prejmenovanymi klici
             var finalData = renameMap.Count > 0
                 ? loader.SignalData.ToDictionary(
                     kvp => renameMap.TryGetValue(kvp.Key, out var newName) ? newName : kvp.Key,
@@ -209,6 +246,7 @@ namespace OscilloscopeGUI {
             string selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "";
             bool isManual = ManualRadio.IsChecked == true;
 
+            // 1 kanal → jen UART, 2 kanaly → UART i SPI, 3+ kanaly → jen SPI
             if (!CheckChannelCount(selectedProtocol, loader.SignalData.Count))
                 return;
 
@@ -216,7 +254,7 @@ namespace OscilloscopeGUI {
                 selectedProtocol,
                 isManual,
                 loader,
-                uartChannelRenameMap,
+                lastUsedUartMapping,
                 ref lastUsedSpiMapping,
                 this
             );
@@ -229,22 +267,45 @@ namespace OscilloscopeGUI {
         }
 
         /// <summary>
-        /// Overi, zda je pro dany protokol k dispozici dostatek kanalu
+        /// Overi, zda se zvolený protokol hodi na aktualni pocet kanalu:
+        ///   - 1 kanal  → pouze UART
+        ///   - 2 kanaly → UART i SPI
+        ///   - 3+kanaly → pouze SPI
         /// </summary>
         private bool CheckChannelCount(string protocol, int channelCount) {
-            int requiredChannels = protocol switch {
-                "UART" => 1,
-                "SPI" => 2,
-                _ => 0
-            };
-
-            if (requiredChannels == 0) {
-                return true;
+            // 1 kanal: jen UART
+            if (channelCount == 1 && protocol != "UART") {
+                MessageBox.Show(
+                    "S jedním kanálem lze dekódovat pouze UART.",
+                    "Neplatná konfigurace",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
             }
 
-            if (channelCount < requiredChannels) {
-                MessageBox.Show($"Pro analýzu {protocol} je potřeba alespoň {requiredChannels} kanály.", 
-                    "Nedostatečný počet kanálů", MessageBoxButton.OK, MessageBoxImage.Warning);
+            // 3 nebo více kanálů: jen SPI
+            if (channelCount >= 3 && protocol != "SPI") {
+                MessageBox.Show(
+                    "Při třech a více kanálech lze dekódovat pouze SPI.",
+                    "Neplatná konfigurace",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
+
+            // 2 kanály: UART i SPI OK, ale zkontrolujeme minimální požadavek
+            int requiredMin = protocol switch {
+                "UART" => 1,
+                "SPI"  => 2,
+                _      => 0
+            };
+            if (channelCount < requiredMin) {
+                var suffix = requiredMin > 1 ? "ů" : "";
+                MessageBox.Show(
+                    $"Pro analýzu {protocol} je potřeba alespoň {requiredMin} kanál{suffix}.",
+                    "Nedostatečný počet kanálů",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
                 return false;
             }
 

@@ -21,9 +21,13 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     /// </summary>
     /// <param name="signalData">Signalova data.</param>
     /// <param name="settings">Nastaveni UART analyzatoru.</param>
-    public UartProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, UartSettings settings, Dictionary<string, string>? renameMap = null) {
+    public UartProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, UartSettings settings, UartChannelMapping? mapping = null) {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        this.channelRenameMap = renameMap;
+        if (mapping is not null) {
+            channelRenameMap = new Dictionary<string, string>();
+            if (!string.IsNullOrEmpty(mapping.Tx)) channelRenameMap[mapping.Tx] = "TX";
+            if (!string.IsNullOrEmpty(mapping.Rx)) channelRenameMap[mapping.Rx] = "RX";
+        }
         this.channelSamples = signalData.ToDictionary(
             kvp => kvp.Key,
             kvp => kvp.Value.Select(p => (p.Time, p.Value > 0.5)).ToList()

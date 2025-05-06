@@ -22,7 +22,7 @@ namespace OscilloscopeGUI.Services {
             string protocol,
             bool isManual,
             SignalLoader loader,
-            Dictionary<string, string>? uartChannelRenameMap,
+            UartChannelMapping? uartMapping,
             ref SpiChannelMapping? lastUsedSpiMapping,
             Window owner
         ) {
@@ -51,7 +51,7 @@ namespace OscilloscopeGUI.Services {
                             uartSettings = UartInferenceHelper.InferUartSettings(signalSamples);
                         }
 
-                        return new UartProtocolAnalyzer(loader.SignalData, uartSettings, uartChannelRenameMap);
+                        return new UartProtocolAnalyzer(loader.SignalData, uartSettings, uartMapping);
 
                     case "SPI":
                         SpiSettings spiSettings;
