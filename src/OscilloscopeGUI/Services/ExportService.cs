@@ -14,7 +14,7 @@ namespace OscilloscopeGUI.Services {
         /// </summary>
         public void Export(IProtocolAnalyzer? analyzer, string? loadedFilePath) {
             if (analyzer is not IExportableAnalyzer exportable) {
-                MessageBox.Show("Aktivní analyzátor nepodporuje export.", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Před exportem klikněte na tlačítko 'Analyzovat'!", "Chyba exportu", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
