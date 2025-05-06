@@ -1,61 +1,111 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using OscilloscopeCLI.Protocols;
 
 namespace OscilloscopeGUI {
-    /// <summary>
-    /// Okno pro nastaveni mapovani SPI kanalu (CS, SCLK, MOSI, MISO).
-    /// </summary>
     public partial class SpiChannelMappingDialog : Window {
         public SpiChannelMapping Mapping { get; private set; } = new();
+
+        // Trida reprezentujici jeden radek (kanal + zvolena role + combo)
+        public class ChannelRole {
+            public string ChannelName { get; set; } = "";
+            public string SelectedRole { get; set; } = "Žádná";
+            public ComboBox? ComboBox { get; set; }
+        }
+
+        private List<ChannelRole> roles = new();
 
         public SpiChannelMappingDialog(List<string> availableChannels) {
             InitializeComponent();
 
-            // Nastavi zdroje dat pro vyberove seznamy
-            CsCombo.ItemsSource = availableChannels;
-            SclkCombo.ItemsSource = availableChannels;
-            MosiCombo.ItemsSource = availableChannels;
-            MisoCombo.ItemsSource = availableChannels;
+            foreach (string ch in availableChannels) {
+                var role = new ChannelRole { ChannelName = ch };
 
-            // Predvybere prvni 4 kanaly (pokud jsou)
-            CsCombo.SelectedIndex = 0;
-            SclkCombo.SelectedIndex = 1;
-            MosiCombo.SelectedIndex = 2;
-            MisoCombo.SelectedIndex = 3;
+                // Radek s nazvem kanalu a comboboxem
+                var row = new StackPanel {
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(0, 4, 0, 4)
+                };
 
-            if (availableChannels.Count < 4) {
-                MisoRow.Visibility = Visibility.Collapsed;
+                row.Children.Add(new TextBlock {
+                    Text = ch + ":",
+                    Width = 80,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+
+                var combo = new ComboBox {
+                    Width = 200,
+                    Height = 25,
+                    ItemsSource = new List<string> { "Žádná", "CS", "SCLK", "MOSI", "MISO" },
+                    SelectedItem = "Žádná"
+                };
+
+                row.Children.Add(combo);
+                FormPanel.Children.Add(row);
+
+                role.ComboBox = combo;
+                roles.Add(role);
             }
         }
 
         private void Ok_Click(object sender, RoutedEventArgs e) {
-            string cs = CsCombo.SelectedItem?.ToString() ?? "";
-            string sclk = SclkCombo.SelectedItem?.ToString() ?? "";
-            string mosi = MosiCombo.SelectedItem?.ToString() ?? "";
-            string miso = MisoCombo.SelectedItem?.ToString() ?? "";
+            // Ziska z comboboxu vybrane hodnoty
+            foreach (var role in roles)
+                role.SelectedRole = role.ComboBox?.SelectedItem?.ToString() ?? "Žádná";
 
-            var selected = new List<string> { cs, sclk, mosi, miso };
-            var duplicates = selected
-                .GroupBy(x => x)
-                .Where(g => g.Count() > 1)
+            var grouped = roles
+                .Where(r => r.SelectedRole != "Žádná")
+                .GroupBy(r => r.SelectedRole)
+                .ToDictionary(g => g.Key, g => g.Select(r => r.ChannelName).ToList());
+
+            // Validace: max 1x kazda role
+            var duplicateRoles = grouped
+                .Where(g => g.Value.Count > 1)
                 .Select(g => g.Key)
                 .ToList();
 
-            if (duplicates.Any()) {
-                MessageBox.Show(
-                    $"Každý signál (CS, SCLK, MOSI, MISO) musí mít unikátní kanál.\nDuplicitní: {string.Join(", ", duplicates)}",
-                    "Chyba mapování",
+            if (duplicateRoles.Any()) {
+                MessageBox.Show($"Každé roli může být přiřazen pouze jeden kanál.\nDuplicitní role: {string.Join(", ", duplicateRoles)}",
+                                "Chyba mapování",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                return;
+            }
+
+            // Povinne signaly
+            List<string> requiredRoles = new() { "SCLK", "MOSI" };
+            var missing = requiredRoles.Where(r => !grouped.ContainsKey(r)).ToList();
+            if (missing.Any()) {
+                MessageBox.Show($"Chybí přiřazení povinných signálů: {string.Join(", ", missing)}",
+                    "Neúplné mapování",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 return;
             }
 
+            // Zadny kanal nesmi zustat neprirazen
+            var unassignedChannels = roles
+                .Where(r => r.SelectedRole == "Žádná")
+                .Select(r => r.ChannelName)
+                .Where(ch => !string.IsNullOrWhiteSpace(ch))
+                .ToList();
+
+            if (unassignedChannels.Any()) {
+                MessageBox.Show($"Následující kanály nemají přiřazenou roli: {string.Join(", ", unassignedChannels)}",
+                                "Nepřiřazené kanály",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                return;
+            }
+
+            // Vytvoreni vysledne mapy
             Mapping = new SpiChannelMapping {
-                ChipSelect = cs,
-                Clock = sclk,
-                Mosi = mosi,
-                Miso = miso
+                ChipSelect = grouped.TryGetValue("CS", out var cs) ? cs.FirstOrDefault() ?? "" : "",
+                Clock = grouped.TryGetValue("SCLK", out var clk) ? clk.FirstOrDefault() ?? "" : "",
+                Mosi = grouped.TryGetValue("MOSI", out var mosi) ? mosi.FirstOrDefault() ?? "" : "",
+                Miso = grouped.TryGetValue("MISO", out var miso) ? miso.FirstOrDefault() ?? "" : ""
             };
 
             DialogResult = true;

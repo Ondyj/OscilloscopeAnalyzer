@@ -115,7 +115,7 @@ namespace OscilloscopeGUI {
         /// Nacte CSV soubor, vykresli signal a provede mapovani kanalu podle zvoleneho protokolu
         /// </summary>
         private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
-            ResetState();
+            
 
             // 1. Vyber CSV souboru
             var filePick = fileLoadingService.PromptForFileOnly(this);
@@ -123,68 +123,82 @@ namespace OscilloscopeGUI {
                 return;
 
             string selectedFilePath = filePick.FilePath!;
+            ResetState();
 
             // 2. Vyber protokolu
-            var protocolDialog = new ProtocolSelectDialog(4); // napevno CH0–CH3
+            var protocolDialog = new ProtocolSelectDialog(4);
             protocolDialog.Owner = this;
             if (protocolDialog.ShowDialog() != true)
                 return;
 
             string selectedProtocol = protocolDialog.SelectedProtocol;
 
-            // 3. Predbezne mapovani SPI (pokud vybran SPI)
-            if (selectedProtocol == "SPI") {
-                var spiMapDialog = new SpiChannelMappingDialog(new List<string> { "CH0", "CH1", "CH2", "CH3" });
-                spiMapDialog.Owner = this;
-                if (spiMapDialog.ShowDialog() != true)
-                    return;
-
-                lastUsedSpiMapping = spiMapDialog.Mapping;
-            }
-
-            // 4. Nacteni CSV
+            // 3. Nacteni CSV souboru
             var loadResult = await fileLoadingService.LoadFromFilePathAsync(loader, selectedFilePath, this);
             if (!loadResult.Success)
                 return;
 
             loadedFilePath = selectedFilePath;
 
-            // 5. Vykresleni
-            var progressDialog = new ProgressDialog();
-            progressDialog.Owner = this;
-            progressDialog.Show();
-            progressDialog.SetTitle("Vykreslování...");
-            progressDialog.SetPhase("Vykreslování");
-            progressDialog.ReportMessage("Vykreslování signálu...");
-            var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
-            await plotter.PlotSignalsAsync(loader.SignalData, progress);
-            navService.ResetView(plotter.EarliestTime);
-            progressDialog.Finish("Vykreslování dokončeno.", autoClose: true);
-            progressDialog.OnOkClicked = () => progressDialog.Close();
+            // 4. Ziskani aktivnich kanalu
+            var activeChannels = loader.GetRemainingChannelNames();
+            Console.WriteLine("Aktivní kanály:");
+            foreach (var ch in activeChannels)
+                Console.WriteLine(ch);
 
-            // 6. Prejmenovani kanalu podle mapy
-            if (selectedProtocol == "SPI" && lastUsedSpiMapping != null) {
-                var renameMap = new Dictionary<string, string> {
+            // 5. Mapovani podle protokolu
+            Dictionary<string, string> renameMap = new();
+            if (selectedProtocol == "SPI") {
+                var defaultMapping = new SpiChannelMapping();
+                Console.WriteLine("[SPI] Výchozí mapování před zadáním uživatele:");
+                Console.WriteLine($"  CS   = {defaultMapping.ChipSelect}");
+                Console.WriteLine($"  SCLK = {defaultMapping.Clock}");
+                Console.WriteLine($"  MOSI = {defaultMapping.Mosi}");
+                Console.WriteLine($"  MISO = {defaultMapping.Miso}");
+
+                var spiMapDialog = new SpiChannelMappingDialog(activeChannels);
+                spiMapDialog.Owner = this;
+                if (spiMapDialog.ShowDialog() != true)
+                    return;
+
+                lastUsedSpiMapping = spiMapDialog.Mapping;
+
+                Console.WriteLine("[SPI] Mapování po výběru uživatele:");
+                Console.WriteLine($"  CS   = {lastUsedSpiMapping.ChipSelect}");
+                Console.WriteLine($"  SCLK = {lastUsedSpiMapping.Clock}");
+                Console.WriteLine($"  MOSI = {lastUsedSpiMapping.Mosi}");
+                Console.WriteLine($"  MISO = {lastUsedSpiMapping.Miso}");
+
+                renameMap = new Dictionary<string, string> {
                     { lastUsedSpiMapping.ChipSelect, "CS" },
                     { lastUsedSpiMapping.Clock, "SCLK" },
                     { lastUsedSpiMapping.Mosi, "MOSI" }
                 };
                 if (!string.IsNullOrEmpty(lastUsedSpiMapping.Miso))
                     renameMap[lastUsedSpiMapping.Miso] = "MISO";
-
-                plotter.RenameChannels(renameMap);
             }
 
-            // 7. Mapovani UART kanalu
-            if (selectedProtocol == "UART") {
-                var uartMapDialog = new UartChannelMappingDialog(loader.SignalData.Keys.ToList());
-                uartMapDialog.Owner = this;
-                if (uartMapDialog.ShowDialog() != true)
-                    return;
+            // 6. Vykresleni signálu (s přejmenovanými klíči)
+            var progressDialog = new ProgressDialog {
+                Owner = this
+            };
+            progressDialog.Show();
+            progressDialog.SetTitle("Vykreslování...");
+            progressDialog.SetPhase("Vykreslování");
+            progressDialog.ReportMessage("Vykreslování signálu...");
+            var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
 
-                uartChannelRenameMap = uartMapDialog.ChannelRenames;
-                plotter.RenameChannels(uartChannelRenameMap);
-            }
+            // pokud existuje renameMap, vytvorime novy slovnik s prejmenovanymi klíči
+            var finalData = renameMap.Count > 0
+                ? loader.SignalData.ToDictionary(
+                    kvp => renameMap.TryGetValue(kvp.Key, out var newName) ? newName : kvp.Key,
+                    kvp => kvp.Value)
+                : loader.SignalData;
+
+            await plotter.PlotSignalsAsync(finalData, progress);
+            navService.ResetView(plotter.EarliestTime);
+            progressDialog.Finish("Vykreslování dokončeno.", autoClose: true);
+            progressDialog.OnOkClicked = () => progressDialog.Close();
         }
 
 
@@ -220,7 +234,7 @@ namespace OscilloscopeGUI {
         private bool CheckChannelCount(string protocol, int channelCount) {
             int requiredChannels = protocol switch {
                 "UART" => 1,
-                "SPI" => 3,
+                "SPI" => 2,
                 _ => 0
             };
 
