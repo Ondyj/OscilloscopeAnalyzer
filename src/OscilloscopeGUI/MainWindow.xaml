@@ -29,20 +29,20 @@
             </ComboBox>
 
             <RadioButton x:Name="AutoDetectRadio" Content="Auto" IsChecked="True" VerticalAlignment="Center" Margin="0,0,5,0"/>
-            <RadioButton x:Name="ManualRadio" Content="Rucne" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <RadioButton x:Name="ManualRadio" Content="Ručně" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
             <Button Content="Analyzovat" Width="100" Click="AnalyzeButton_Click" Margin="5,0"/>
 
             <!-- Vyhledavani -->
             <TextBlock Text="Hledat:" VerticalAlignment="Center" Margin="10,0,5,0"/>
             <TextBox x:Name="SearchBox" Width="80" Margin="0,0,5,0"
-                     Text="napr. FF" Foreground="Gray"
+                     Text="např. FF" Foreground="Gray"
                      KeyDown="SearchBox_KeyDown"
                      GotFocus="SearchBox_GotFocus"
                      LostFocus="SearchBox_LostFocus" />
             <Button Content="Vyhledat" Click="SearchButton_Click" Width="80" />
 
-            <Button Content="Exportovat vysledky" Width="140" Click="ExportResultsButton_Click" Margin="5,0"/>
+            <Button Content="Exportovat výsledky" Width="140" Click="ExportResultsButton_Click" Margin="5,0"/>
         </StackPanel>
 
         <!-- Filtry, format zobrazeni a statistiky -->
@@ -50,26 +50,19 @@
 
             <!-- Format zobrazeni -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
-                <TextBlock Text="Format:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <TextBlock Text="Formát:" VerticalAlignment="Center" Margin="0,0,5,0"/>
                 <RadioButton GroupName="Format" Content="HEX" IsChecked="True" Checked="FormatChanged" Margin="0,0,5,0"/>
                 <RadioButton GroupName="Format" Content="DEC" Checked="FormatChanged" Margin="0,0,5,0"/>
                 <RadioButton GroupName="Format" Content="ASCII" Checked="FormatChanged"/>
             </StackPanel>
             
             <!-- Filtr zobrazeni -->
-            <StackPanel Orientation="Horizontal" Margin="0,0,20,0" VerticalAlignment="Center">
-                <TextBlock Text="Zobrazit:" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                <CheckBox x:Name="ShowAllTransfersCheckBox" Content="Vse" IsChecked="True" Checked="FilterChanged" Unchecked="FilterChanged" Margin="0,0,10,0"/>
-                <CheckBox x:Name="ShowErrorsOnlyCheckBox" Content="Chyby" Checked="FilterChanged" Unchecked="FilterChanged"/>
+            <StackPanel Orientation="Horizontal" Margin="0,5,0,5">
+                <TextBlock Text="Zobrazení:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <RadioButton x:Name="FilterAllRadio" Content="Vše" IsChecked="True" Checked="FilterRadio_Checked" Margin="0,0,10,0"/>
+                <RadioButton x:Name="FilterNoErrorRadio" Content="Bez chyb" Checked="FilterRadio_Checked" Margin="0,0,10,0"/>
+                <RadioButton x:Name="FilterErrorRadio" Content="Jen chyby" Checked="FilterRadio_Checked"/>
             </StackPanel>
-
-            <!-- Vyber typu chyby -->
-            <ComboBox x:Name="ErrorTypeComboBox" Width="150" Margin="0,0,20,0" SelectionChanged="FilterChanged">
-                <ComboBoxItem Content="Vsechny typy chyb" IsSelected="True"/>
-                <ComboBoxItem Content="Kratky prenos"/>
-                <ComboBoxItem Content="Neaktivni signal"/>
-                <ComboBoxItem Content="Chybny pocet bitu"/>
-            </ComboBox>
 
         </StackPanel>
 

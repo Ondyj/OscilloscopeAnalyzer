@@ -5,6 +5,12 @@ using OscilloscopeCLI.Protocols;
 using System.Globalization;
 
 namespace OscilloscopeGUI.Services {
+
+    public enum ByteFilterMode {
+        All,
+        OnlyErrors,
+        NoErrors
+    }
     public class SearchService {
         private readonly WpfPlot plot;
         private readonly PlotNavigationService navService;
@@ -14,6 +20,8 @@ namespace OscilloscopeGUI.Services {
         private ScottPlot.Plottables.VerticalLine? matchLine = null;
         private TextBlock? resultInfoTextBlock;
         private UIElement? navigationPanel;
+        private Action? updateAnnotationsCallback;
+        private Func<ByteFilterMode>? getFilterModeCallback;
 
         /// <summary>
         /// Inicializuje novou instanci tridy SearchService s odkazem na graf a navigaci.
@@ -84,6 +92,7 @@ namespace OscilloscopeGUI.Services {
                 matchLine.X = timestamp;
             }
 
+            updateAnnotationsCallback?.Invoke();
             plot.Refresh();
         }
 
@@ -122,6 +131,12 @@ namespace OscilloscopeGUI.Services {
                 matchLine = null;
                 plot.Refresh();
             }
+        }
+        public void SetFilterCallback(Func<ByteFilterMode> getFilterMode) {
+            getFilterModeCallback = getFilterMode;
+        }
+        public void SetUpdateCallback(Action updateAnnotations) {
+            updateAnnotationsCallback = updateAnnotations;
         }
     }
 }

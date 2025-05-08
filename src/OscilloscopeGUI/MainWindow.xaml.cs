@@ -35,6 +35,8 @@ namespace OscilloscopeGUI {
         private enum ByteDisplayFormat { Hex, Dec, Ascii }
         private ByteDisplayFormat currentFormat = ByteDisplayFormat.Hex;
 
+        private List<UartDecodedByte>? filteredUartBytes = null;
+        private List<SpiDecodedByte>? filteredSpiBytes = null;
         private double? timeMark1 = null;
         private double? timeMark2 = null;
         private ScottPlot.Plottables.VerticalLine? line1 = null;
@@ -67,6 +69,7 @@ namespace OscilloscopeGUI {
                 isDragging = true;
                 lastMousePosition = e.GetPosition(plot);
                 plot.CaptureMouse();
+                UpdateAnnotations();
             };
 
             plot.MouseLeftButtonUp += (s, e) => {
@@ -120,8 +123,10 @@ namespace OscilloscopeGUI {
             }
 
             if (activeAnalyzer is UartProtocolAnalyzer uart) {
-                for (int i = 0; i < uart.DecodedBytes.Count; i++) {
-                    var b = uart.DecodedBytes[i];
+                var bytes = filteredUartBytes ?? uart.DecodedBytes;
+
+                for (int i = 0; i < bytes.Count; i++) {
+                    var b = bytes[i];
                     double centerX = (b.StartTime + b.EndTime) / 2;
                     if (centerX < xMin || centerX > xMax)
                         continue;
@@ -131,6 +136,7 @@ namespace OscilloscopeGUI {
                     var text = plot.Plot.Add.Text(FormatByte(b.Value), centerX, 1.3);
                     text.LabelStyle.FontSize = 16;
                     text.LabelStyle.Bold = true;
+                    text.LabelFontColor = color;
                     byteLabels.Add(text);
 
                     var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
@@ -146,8 +152,10 @@ namespace OscilloscopeGUI {
                     byteStartLines.Add(lineEnd);
                 }
             } else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
-                for (int i = 0; i < spi.DecodedBytes.Count; i++) {
-                    var b = spi.DecodedBytes[i];
+                var bytes = filteredSpiBytes ?? spi.DecodedBytes;
+
+                for (int i = 0; i < bytes.Count; i++) {
+                    var b = bytes[i];
                     double centerX = (b.StartTime + b.EndTime) / 2;
                     if (centerX < xMin || centerX > xMax)
                         continue;
@@ -157,6 +165,7 @@ namespace OscilloscopeGUI {
                     var text = plot.Plot.Add.Text(FormatByte(b.ValueMOSI), centerX, 1.3);
                     text.LabelStyle.FontSize = 16;
                     text.LabelStyle.Bold = true;
+                    text.LabelFontColor = color;
                     byteLabels.Add(text);
 
                     var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
@@ -192,6 +201,41 @@ namespace OscilloscopeGUI {
                 }
                 UpdateAnnotations();
             }
+        }
+
+        private void FilterRadio_Checked(object sender, RoutedEventArgs e) {
+            if (FilterAllRadio == null || FilterNoErrorRadio == null || FilterErrorRadio == null)
+                return;
+
+            string filter = "all";
+
+            if (FilterNoErrorRadio.IsChecked == true)
+                filter = "noerror";
+            else if (FilterErrorRadio.IsChecked == true)
+                filter = "error";
+
+            ApplyFilter(filter);
+        }
+
+        private void ApplyFilter(string filter) {
+            if (activeAnalyzer is UartProtocolAnalyzer uart) {
+                filteredUartBytes = filter switch
+                {
+                    "error" => uart.DecodedBytes.Where(b => !string.IsNullOrEmpty(b.Error)).ToList(),
+                    "noerror" => uart.DecodedBytes.Where(b => string.IsNullOrEmpty(b.Error)).ToList(),
+                    _ => uart.DecodedBytes.ToList()
+                };
+            }
+            else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
+                filteredSpiBytes = filter switch
+                {
+                    "error" => spi.DecodedBytes.Where(b => !string.IsNullOrEmpty(b.Error)).ToList(),
+                    "noerror" => spi.DecodedBytes.Where(b => string.IsNullOrEmpty(b.Error)).ToList(),
+                    _ => spi.DecodedBytes.ToList()
+                };
+            }
+
+            UpdateAnnotations();
         }
 
         /// <summary>
@@ -537,6 +581,9 @@ namespace OscilloscopeGUI {
             line1 = null;
             line2 = null;
 
+            filteredUartBytes = null;
+            filteredSpiBytes = null;
+
             MeasurementInfo.Text = "";
             MeasurementInfo.Visibility = Visibility.Collapsed;
 
@@ -590,10 +637,17 @@ namespace OscilloscopeGUI {
         /// </summary>
         private void SetAnalyzer(IProtocolAnalyzer analyzer) {
             activeAnalyzer = analyzer;
-            if (analyzer is ISearchableAnalyzer searchable)
+
+            // Reset filtrovanych dat
+            filteredUartBytes = null;
+            filteredSpiBytes = null;
+
+            if (analyzer is ISearchableAnalyzer searchable) {
                 searchService.SetAnalyzer(searchable);
-            else
+                searchService.SetUpdateCallback(UpdateAnnotations); // ← zde nastavíš callback
+            } else {
                 searchService.Reset();
+            }
         }
 
         /// <summary>
@@ -611,5 +665,6 @@ namespace OscilloscopeGUI {
         {
             // TODO: Zobrazit statistiky jako pocet prenosu, bajtu, prumernou delku atd.
         }
+
     }
 }
