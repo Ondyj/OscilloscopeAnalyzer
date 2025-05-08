@@ -7,6 +7,7 @@ using OscilloscopeGUI.Services;
 using System.Windows.Input;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
+using ScottPlot;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
@@ -27,6 +28,12 @@ namespace OscilloscopeGUI {
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool AllocConsole();
+
+        private List<ScottPlot.Plottables.Text> byteLabels = new();
+        private List<IPlottable> byteStartLines = new();
+
+        private enum ByteDisplayFormat { Hex, Dec, Ascii }
+        private ByteDisplayFormat currentFormat = ByteDisplayFormat.Hex;
 
         private double? timeMark1 = null;
         private double? timeMark2 = null;
@@ -78,7 +85,113 @@ namespace OscilloscopeGUI {
 
             plot.MouseRightButtonDown += Plot_MouseRightButtonDown;
 
-            
+            plot.MouseWheel += (s, e) => UpdateAnnotations();
+            plot.MouseLeftButtonUp += (s, e) => UpdateAnnotations();
+            plot.MouseRightButtonUp += (s, e) => UpdateAnnotations();
+            this.KeyUp += (s, e) => UpdateAnnotations();
+        }
+
+        private void UpdateAnnotations() {
+            foreach (var label in byteLabels)
+                plot.Plot.Remove(label);
+            byteLabels.Clear();
+
+            foreach (var line in byteStartLines)
+                plot.Plot.Remove(line);
+            byteStartLines.Clear();
+
+            if (activeAnalyzer is null)
+                return;
+
+            var limits = plot.Plot.Axes.GetLimits();
+            double xMin = limits.Left;
+            double xMax = limits.Right;
+
+            ScottPlot.Color startColor = ScottPlot.Colors.Gray;
+            ScottPlot.Color altColor = ScottPlot.Colors.Black;
+
+            string FormatByte(byte b) {
+                return currentFormat switch {
+                    ByteDisplayFormat.Hex => $"0x{b:X2}",
+                    ByteDisplayFormat.Dec => b.ToString(),
+                    ByteDisplayFormat.Ascii => char.IsControl((char)b) ? "." : ((char)b).ToString(),
+                    _ => $"0x{b:X2}"
+                };
+            }
+
+            if (activeAnalyzer is UartProtocolAnalyzer uart) {
+                for (int i = 0; i < uart.DecodedBytes.Count; i++) {
+                    var b = uart.DecodedBytes[i];
+                    double centerX = (b.StartTime + b.EndTime) / 2;
+                    if (centerX < xMin || centerX > xMax)
+                        continue;
+
+                    var color = (i % 2 == 0) ? startColor : altColor;
+
+                    var text = plot.Plot.Add.Text(FormatByte(b.Value), centerX, 1.3);
+                    text.LabelStyle.FontSize = 16;
+                    text.LabelStyle.Bold = true;
+                    byteLabels.Add(text);
+
+                    var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
+                    lineStart.Color = color;
+                    lineStart.LineWidth = 1;
+                    lineStart.LinePattern = ScottPlot.LinePattern.Dashed;
+                    byteStartLines.Add(lineStart);
+
+                    var lineEnd = plot.Plot.Add.VerticalLine(b.EndTime);
+                    lineEnd.Color = color;
+                    lineEnd.LineWidth = 1;
+                    lineEnd.LinePattern = ScottPlot.LinePattern.Dashed;
+                    byteStartLines.Add(lineEnd);
+                }
+            } else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
+                for (int i = 0; i < spi.DecodedBytes.Count; i++) {
+                    var b = spi.DecodedBytes[i];
+                    double centerX = (b.StartTime + b.EndTime) / 2;
+                    if (centerX < xMin || centerX > xMax)
+                        continue;
+
+                    var color = (i % 2 == 0) ? startColor : altColor;
+
+                    var text = plot.Plot.Add.Text(FormatByte(b.ValueMOSI), centerX, 1.3);
+                    text.LabelStyle.FontSize = 16;
+                    text.LabelStyle.Bold = true;
+                    byteLabels.Add(text);
+
+                    var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
+                    lineStart.Color = color;
+                    lineStart.LineWidth = 1;
+                    lineStart.LinePattern = ScottPlot.LinePattern.Dashed;
+                    byteStartLines.Add(lineStart);
+
+                    var lineEnd = plot.Plot.Add.VerticalLine(b.EndTime);
+                    lineEnd.Color = color;
+                    lineEnd.LineWidth = 1;
+                    lineEnd.LinePattern = ScottPlot.LinePattern.Dashed;
+                    byteStartLines.Add(lineEnd);
+                }
+            }
+
+            plot.Refresh();
+        }
+
+
+        private void FormatChanged(object sender, RoutedEventArgs e) {
+            if (sender is RadioButton rb && rb.IsChecked == true) {
+                switch (rb.Content.ToString()) {
+                    case "HEX":
+                        currentFormat = ByteDisplayFormat.Hex;
+                        break;
+                    case "DEC":
+                        currentFormat = ByteDisplayFormat.Dec;
+                        break;
+                    case "ASCII":
+                        currentFormat = ByteDisplayFormat.Ascii;
+                        break;
+                }
+                UpdateAnnotations();
+            }
         }
 
         /// <summary>
@@ -489,14 +602,6 @@ namespace OscilloscopeGUI {
         private void FilterChanged(object sender, RoutedEventArgs e)
         {
             // TODO: Implementovat filtrovanou aktualizaci vysledku
-        }
-
-        /// <summary>
-        /// Zpracuje zmenu formatovani zobrazenych hodnot (HEX / DEC / ASCII)
-        /// </summary>
-        private void FormatChanged(object sender, RoutedEventArgs e)
-        {
-            // TODO: Zmenit format zobrazeni bajtu v grafu a vysledcich
         }
 
         /// <summary>

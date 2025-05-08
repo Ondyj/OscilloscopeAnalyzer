@@ -131,7 +131,12 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         var bitsMosi = new List<bool>();
         var bitsMiso = new List<bool>();
 
+        double? currentByteStart = null;
+
         foreach (var edge in edges) {
+            if (currentByteStart == null)
+                currentByteStart = edge.Time;
+
             bitsMosi.Add(mosiReader.GetStateAt(edge.Time));
             if (hasMiso && misoReader != null)
                 bitsMiso.Add(misoReader.GetStateAt(edge.Time));
@@ -139,18 +144,23 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
             if (bitsMosi.Count == settings.BitsPerWord) {
                 DecodedBytes.Add(new SpiDecodedByte {
                     Timestamp = edge.Time,
+                    StartTime = currentByteStart.Value,
+                    EndTime = edge.Time,
                     ValueMOSI = PackBits(bitsMosi),
                     ValueMISO = hasMiso && bitsMiso.Count == settings.BitsPerWord ? PackBits(bitsMiso) : (byte)0x00,
                     Error = null
                 });
                 bitsMosi.Clear();
                 bitsMiso.Clear();
+                currentByteStart = null;
             }
         }
 
         if (bitsMosi.Count > 0) {
             DecodedBytes.Add(new SpiDecodedByte {
                 Timestamp = endTime,
+                StartTime = currentByteStart ?? startTime,
+                EndTime = endTime,
                 ValueMOSI = PackBits(bitsMosi),
                 ValueMISO = hasMiso ? PackBits(bitsMiso) : (byte)0x00,
                 Error = "nekompletní bajt (méně bitů než očekáváno)"
@@ -160,6 +170,8 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         if (edges.Count != settings.BitsPerWord && bitsMosi.Count == 0) {
             DecodedBytes.Add(new SpiDecodedByte {
                 Timestamp = endTime,
+                StartTime = startTime,
+                EndTime = endTime,
                 ValueMOSI = 0,
                 ValueMISO = 0,
                 Error = $"nesoulad počtu hran ({edges.Count}) a očekávaných bitů ({settings.BitsPerWord})"

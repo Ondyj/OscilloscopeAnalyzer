@@ -115,6 +115,8 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
 
         return new UartDecodedByte {
             Timestamp = startTime,
+            StartTime = startTime,
+            EndTime = GetStopBitTime(startTime, bitTime),
             Value = value,
             Error = error
         };
