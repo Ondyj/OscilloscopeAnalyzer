@@ -77,6 +77,8 @@ namespace OscilloscopeGUI {
             };
 
             plot.MouseRightButtonDown += Plot_MouseRightButtonDown;
+
+            
         }
 
         /// <summary>
@@ -479,6 +481,30 @@ namespace OscilloscopeGUI {
                 searchService.SetAnalyzer(searchable);
             else
                 searchService.Reset();
+        }
+
+        /// <summary>
+        /// Zpracuje zmenu filtru pro zobrazeni chyb nebo vsech prenosu
+        /// </summary>
+        private void FilterChanged(object sender, RoutedEventArgs e)
+        {
+            // TODO: Implementovat filtrovanou aktualizaci vysledku
+        }
+
+        /// <summary>
+        /// Zpracuje zmenu formatovani zobrazenych hodnot (HEX / DEC / ASCII)
+        /// </summary>
+        private void FormatChanged(object sender, RoutedEventArgs e)
+        {
+            // TODO: Zmenit format zobrazeni bajtu v grafu a vysledcich
+        }
+
+        /// <summary>
+        /// Aktualizuje statistiky po analyze
+        /// </summary>
+        private void UpdateStatistics()
+        {
+            // TODO: Zobrazit statistiky jako pocet prenosu, bajtu, prumernou delku atd.
         }
     }
 }
