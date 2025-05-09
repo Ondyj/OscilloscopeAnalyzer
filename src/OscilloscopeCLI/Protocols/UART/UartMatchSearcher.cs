@@ -53,13 +53,14 @@ public class UartMatchSearcher {
     /// <param name="index">Index vysledku.</param>
     /// <returns>Formatovany retezec s informacemi o vysledku.</returns>
     public string GetMatchDisplay(int index) {
-        var match = GetMatch(index);
-        string ascii = (match.Value >= 32 && match.Value <= 126)
-            ? ((char)match.Value).ToString()
-            : $"\\x{match.Value:X2}";
+        var match = matches[index];
+        string ascii = (match.Value >= 32 && match.Value <= 126) ? ((char)match.Value).ToString() : $"\\x{match.Value:X2}";
         string error = match.Error ?? "žádný";
+        string hex = $"0x{match.Value:X2}";
+        string dec = match.Value.ToString();
         string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
-        return $"Time: {timestamp}s | ASCII: {ascii} | Error: {error}";
+
+        return $"Time: {timestamp}s | HEX: {hex} | DEC: {dec} | ASCII: {ascii} | Error: {error}";
     }
 
     /// <summary>

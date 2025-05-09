@@ -616,7 +616,7 @@ namespace OscilloscopeGUI {
         /// Vymaze napovedni text ve vyhledavacim poli pri ziskani fokusu
         /// </summary>
         private void SearchBox_GotFocus(object sender, RoutedEventArgs e) {
-            if (SearchBox.Text == "např. FF") {
+            if (SearchBox.Text == "(0xFF/65/A)") {
                 SearchBox.Text = "";
                 SearchBox.Foreground = new SolidColorBrush(System.Windows.Media.Colors.Black);
             }
@@ -627,7 +627,7 @@ namespace OscilloscopeGUI {
         /// </summary>
         private void SearchBox_LostFocus(object sender, RoutedEventArgs e) {
             if (string.IsNullOrWhiteSpace(SearchBox.Text)) {
-                SearchBox.Text = "např. FF";
+                SearchBox.Text = "(0xFF/65/A)";
                 SearchBox.Foreground = new SolidColorBrush(System.Windows.Media.Colors.Gray);
             }
         }

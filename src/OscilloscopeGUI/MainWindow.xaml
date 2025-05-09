@@ -36,7 +36,7 @@
             <!-- Vyhledavani -->
             <TextBlock Text="Hledat:" VerticalAlignment="Center" Margin="10,0,5,0"/>
             <TextBox x:Name="SearchBox" Width="80" Margin="0,0,5,0"
-                     Text="např. FF" Foreground="Gray"
+                     Text="(0xFF/65/A)" Foreground="Gray"
                      KeyDown="SearchBox_KeyDown"
                      GotFocus="SearchBox_GotFocus"
                      LostFocus="SearchBox_LostFocus" />

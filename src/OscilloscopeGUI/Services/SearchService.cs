@@ -50,11 +50,30 @@ namespace OscilloscopeGUI.Services {
         /// <summary>
         /// Spusti vyhledavani hodnoty v hex formatu v dekodovanych datech.
         /// </summary>
-        public void Search(string queryHex) {
+        public void Search(string query) {
             if (analyzer == null) return;
 
-            if (!byte.TryParse(queryHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte value)) {
-                MessageBox.Show("Neplatný hexadecimální vstup. Zadejte např. 'A5'", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+            byte value;
+            string trimmed = query.Trim();
+
+            // HEX: začíná na 0x nebo 0X
+            if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) {
+                string hexPart = trimmed.Substring(2);
+                if (!byte.TryParse(hexPart, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value)) {
+                    ShowInvalidInput(trimmed);
+                    return;
+                }
+            }
+            // ASCII znak (pouze jeden znak)
+            else if (trimmed.Length == 1) {
+                value = (byte)trimmed[0];
+            }
+            // Dessitkova hodnota
+            else if (byte.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out value)) {
+                // OK
+            }
+            else {
+                ShowInvalidInput(trimmed);
                 return;
             }
 
@@ -66,10 +85,19 @@ namespace OscilloscopeGUI.Services {
                 ShowMatch();
                 if (navigationPanel != null) navigationPanel.Visibility = Visibility.Visible;
             } else {
-                MessageBox.Show($"Hodnota 0x{value:X2} nebyla nalezena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
-                if (navigationPanel != null) navigationPanel.Visibility = Visibility.Collapsed;
+                MessageBox.Show($"Hodnota {FormatByte(value)} nebyla nalezena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
+
+        private void ShowInvalidInput(string input) {
+            MessageBox.Show($"Zadaný vstup „{input}“ není platný.\n\nPoužijte jeden z následujících formátů:\n- 0xFF (HEX)\n- 65 (DEC)\n- A (ASCII znak)", "Neplatný vstup", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        private string FormatByte(byte b) {
+            string ascii = (b >= 32 && b <= 126) ? ((char)b).ToString() : $"\\x{b:X2}";
+            return $"0x{b:X2} / {b} / {ascii}";
+        }
+
 
         /// <summary>
         /// Zobrazi aktualni nalezenou hodnotu v grafu a posune se na ni.
@@ -86,7 +114,7 @@ namespace OscilloscopeGUI.Services {
 
             if (matchLine == null) {
                 matchLine = plot.Plot.Add.VerticalLine(timestamp);
-                matchLine.Color = new ScottPlot.Color(255, 0, 0, 128); // transparent red
+                matchLine.Color = new ScottPlot.Color(255, 0, 0, 128);
                 matchLine.LineWidth = 2;
             } else {
                 matchLine.X = timestamp;
@@ -95,7 +123,6 @@ namespace OscilloscopeGUI.Services {
             updateAnnotationsCallback?.Invoke();
             plot.Refresh();
         }
-
         /// <summary>
         /// Presune se na dalsi vysledek vyhledavani.
         /// </summary>
@@ -124,7 +151,7 @@ namespace OscilloscopeGUI.Services {
             currentMatchIndex = 0;
             searchedValue = null;
             resultInfoTextBlock?.Dispatcher.Invoke(() => resultInfoTextBlock.Text = "");
-            if (navigationPanel != null) navigationPanel.Visibility = Visibility.Collapsed;
+
 
             if (matchLine != null) {
                 plot.Plot.Remove(matchLine);

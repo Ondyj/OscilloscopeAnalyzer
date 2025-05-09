@@ -55,18 +55,29 @@ public class SpiMatchSearcher {
     /// <returns>Formatovany retezec s informacemi o vysledku.</returns>
     public string GetMatchDisplay(int index) {
         var match = GetMatch(index);
-        string asciiChar = (match.ValueMOSI >= 32 && match.ValueMOSI <= 126)
+
+        string time = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
+
+        string hexMosi = $"0x{match.ValueMOSI:X2}";
+        string decMosi = match.ValueMOSI.ToString();
+
+        string hexMiso = $"0x{match.ValueMISO:X2}";
+        string decMiso = match.ValueMISO.ToString();
+
+        string ascii = (match.ValueMOSI >= 32 && match.ValueMOSI <= 126)
             ? ((char)match.ValueMOSI).ToString()
             : $"\\x{match.ValueMOSI:X2}";
+
         string error = match.Error ?? "žádný";
-        string timestamp = match.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
-        return $"Time: {timestamp}s | ASCII: {asciiChar} | Error: {error}";
+
+        return $"Time: {time}s | MOSI: {hexMosi} ({decMosi}) | MISO: {hexMiso} ({decMiso}) | ASCII: {ascii} | Error: {error}";
     }
+
 
     /// <summary>
     /// Vrati casovou znacku nalezeneho vysledku.
     /// </summary>
     /// <param name="index">Index vysledku.</param>
     /// <returns>Casova znacka v sekundach.</returns>
-    public double GetMatchTimestamp(int index) => GetMatch(index).Timestamp;
+    public double GetMatchTimestamp(int index) => GetMatch(index).StartTime;
 }
