@@ -428,6 +428,7 @@ namespace OscilloscopeGUI {
             if (analyzer != null) {
                 analyzer.Analyze();
                 SetAnalyzer(analyzer);
+                UpdateStatistics();
                 MessageBox.Show($"{analyzer.ProtocolName} analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
@@ -573,7 +574,6 @@ namespace OscilloscopeGUI {
         private void ResetState() {
             activeAnalyzer = null;
 
-            ResultNavigationPanel.Visibility = Visibility.Collapsed;
             ResultInfo.Text = "";
 
             timeMark1 = null;
@@ -586,6 +586,8 @@ namespace OscilloscopeGUI {
 
             MeasurementInfo.Text = "";
             MeasurementInfo.Visibility = Visibility.Collapsed;
+
+            ResetStatistics();
 
             plot.Plot.Clear();
             plot.Refresh();
@@ -603,6 +605,52 @@ namespace OscilloscopeGUI {
         /// </summary>
         private void NextResult_Click(object sender, RoutedEventArgs e) {
             searchService.NextMatch();
+        }
+
+        private void UpdateStatistics() {
+            int total = 0;
+            int errors = 0;
+            double avgDurationUs = 0;
+            double minUs = 0;
+            double maxUs = 0;
+
+            if (activeAnalyzer is UartProtocolAnalyzer uart) {
+                var bytes = filteredUartBytes ?? uart.DecodedBytes;
+                total = bytes.Count;
+                errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
+                avgDurationUs = bytes.Count > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+                minUs = bytes.Count > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+                maxUs = bytes.Count > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+
+                double bitsPerByte = uart.Settings.DataBits + 1 + (uart.Settings.Parity == Parity.None ? 0 : 1) + uart.Settings.StopBits;
+                double avgBaud = avgDurationUs > 0 ? (bitsPerByte * 1_000_000.0 / avgDurationUs) : 0;
+
+                StatsBaudRate.Text = $"Odhadovaná přenosová rychlost: {avgBaud:F0} baud";
+                StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
+                StatsSpiTransfers.Text = "Počet přenosů (SPI): –";
+                StatsMosiMiso.Text = "Počet bajtů MOSI/MISO: –";
+            }
+            else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
+                var bytes = filteredSpiBytes ?? spi.DecodedBytes;
+                total = bytes.Count;
+                errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
+                avgDurationUs = bytes.Count > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+                minUs = bytes.Count > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+                maxUs = bytes.Count > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+
+                int transferCount = spi.TransferCount;
+                double avgTransferLength = spi.AvgTransferDurationUs;
+                int misoBytes = bytes.Count(b => b.HasMISO);
+
+                StatsBaudRate.Text = $"Prům. délka SPI přenosu: {avgTransferLength:F1} µs";
+                StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
+                StatsSpiTransfers.Text = $"Počet přenosů (CS aktivní): {transferCount}";
+                StatsMosiMiso.Text = $"Bajty MOSI / MISO: {total - misoBytes} / {misoBytes}";
+            }
+
+            StatsTotalBytes.Text = $"Celkový počet bajtů: {total}";
+            StatsErrors.Text = $"Počet bajtů s chybou: {errors}";
+            StatsAvgDuration.Text = $"Průměrná délka bajtu: {avgDurationUs:F1} µs";
         }
 
         /// <summary>
@@ -650,20 +698,10 @@ namespace OscilloscopeGUI {
             }
         }
 
-        /// <summary>
-        /// Zpracuje zmenu filtru pro zobrazeni chyb nebo vsech prenosu
-        /// </summary>
-        private void FilterChanged(object sender, RoutedEventArgs e)
-        {
-            // TODO: Implementovat filtrovanou aktualizaci vysledku
-        }
-
-        /// <summary>
-        /// Aktualizuje statistiky po analyze
-        /// </summary>
-        private void UpdateStatistics()
-        {
-            // TODO: Zobrazit statistiky jako pocet prenosu, bajtu, prumernou delku atd.
+        private void ResetStatistics() {
+            StatsTotalBytes.Text = "Celkem: –";
+            StatsErrors.Text = "Chyby: –";
+            StatsAvgDuration.Text = "Prumerna delka: –";
         }
 
     }

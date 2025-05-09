@@ -12,6 +12,8 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     private bool hasMiso = false; // Udava, zda je dostupny kanal MISO
 
     public List<SpiDecodedByte> DecodedBytes { get; private set; } = new(); // Seznam dekodovanych bajtu
+    public int TransferCount { get; private set; } = 0;
+    public double AvgTransferDurationUs { get; private set; } = 0.0;
 
     public string ProtocolName => "SPI"; // Nazev analyzovaneho protokolu
 
@@ -116,6 +118,13 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         globalWatch.Stop();
         Console.WriteLine($"[SPI] Analýza dokončena za {globalWatch.Elapsed.TotalMilliseconds:F2} ms.");
         Console.WriteLine($"[SPI] Dekódováno {DecodedBytes.Count} bajtů.");
+
+        TransferCount = transferWindows.Count;
+        if (transferWindows.Count > 0) {
+            AvgTransferDurationUs = transferWindows.Average(t => (t.EndTime - t.StartTime) * 1e6);
+        } else {
+            AvgTransferDurationUs = 0.0;
+        }
     }
     private static Dictionary<string, List<Tuple<double, double>>> ConvertToTuple(Dictionary<string, List<(double Time, double Value)>> source) {
         return source.ToDictionary(
@@ -148,7 +157,8 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
                     EndTime = edge.Time,
                     ValueMOSI = PackBits(bitsMosi),
                     ValueMISO = hasMiso && bitsMiso.Count == settings.BitsPerWord ? PackBits(bitsMiso) : (byte)0x00,
-                    Error = null
+                    Error = null,
+                    HasMISO = hasMiso && bitsMiso.Count == settings.BitsPerWord
                 });
                 bitsMosi.Clear();
                 bitsMiso.Clear();

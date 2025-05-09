@@ -9,15 +9,15 @@
         Title="Oscilloscope Analyzer" Height="700" Width="1000" WindowStartupLocation="CenterScreen">
 
     <Grid>
-        <!-- Definice radku pro tlacitka, filtry, vyhledavani a graf -->
+        <!-- Radky rozdelene pro ovladaci prvky a graf -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Radek 0: Tlacitka -->
-            <RowDefinition Height="Auto"/>  <!-- Radek 1: Filtry, format a statistiky -->
-            <RowDefinition Height="Auto"/>  <!-- Radek 2: Vyhledavani vysledku -->
+            <RowDefinition Height="Auto"/>  <!-- Radek 1: Format, filtry, statistiky -->
+            <RowDefinition Height="Auto"/>  <!-- Radek 2: Navigace vysledku -->
             <RowDefinition Height="*"/>     <!-- Radek 3: Graf -->
         </Grid.RowDefinitions>
 
-        <!-- Tlacitka nahore -->
+        <!-- Horni tlacitka a volby -->
         <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="10">
             <Button Content="Nacist CSV" Width="120" Click="LoadCsv_Click" Margin="5,0"/>
 
@@ -29,7 +29,7 @@
             </ComboBox>
 
             <RadioButton x:Name="AutoDetectRadio" Content="Auto" IsChecked="True" VerticalAlignment="Center" Margin="0,0,5,0"/>
-            <RadioButton x:Name="ManualRadio" Content="Ručně" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <RadioButton x:Name="ManualRadio" Content="Rucne" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
             <Button Content="Analyzovat" Width="100" Click="AnalyzeButton_Click" Margin="5,0"/>
 
@@ -42,31 +42,62 @@
                      LostFocus="SearchBox_LostFocus" />
             <Button Content="Vyhledat" Click="SearchButton_Click" Width="80" />
 
-            <Button Content="Exportovat výsledky" Width="140" Click="ExportResultsButton_Click" Margin="5,0"/>
+            <Button Content="Exportovat vysledky" Width="140" Click="ExportResultsButton_Click" Margin="5,0"/>
         </StackPanel>
 
-        <!-- Filtry, format zobrazeni a statistiky -->
-        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="10" VerticalAlignment="Center" HorizontalAlignment="Left">
+        <!-- Radek s formatem, filtry a statistikami -->
+        <Grid Grid.Row="1" Margin="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>    <!-- Leva cast: formaty a filtry -->
+                <ColumnDefinition Width="Auto"/> <!-- Prava cast: statistiky -->
+            </Grid.ColumnDefinitions>
 
-            <!-- Format zobrazeni -->
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
-                <TextBlock Text="Formát:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                <RadioButton GroupName="Format" Content="HEX" IsChecked="True" Checked="FormatChanged" Margin="0,0,5,0"/>
-                <RadioButton GroupName="Format" Content="DEC" Checked="FormatChanged" Margin="0,0,5,0"/>
-                <RadioButton GroupName="Format" Content="ASCII" Checked="FormatChanged"/>
+            <!-- Format a filtr zobrazeni -->
+            <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                <!-- Format zobrazeni -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
+                    <TextBlock Text="Format:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <RadioButton GroupName="Format" Content="HEX" IsChecked="True" Checked="FormatChanged" Margin="0,0,5,0"/>
+                    <RadioButton GroupName="Format" Content="DEC" Checked="FormatChanged" Margin="0,0,5,0"/>
+                    <RadioButton GroupName="Format" Content="ASCII" Checked="FormatChanged"/>
+                </StackPanel>
+
+                <!-- Filtry pro zobrazeni -->
+                <StackPanel Orientation="Horizontal" Margin="0,5,0,5">
+                    <TextBlock Text="Zobrazeni:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <RadioButton x:Name="FilterAllRadio" Content="Vse" IsChecked="True" Checked="FilterRadio_Checked" Margin="0,0,10,0"/>
+                    <RadioButton x:Name="FilterNoErrorRadio" Content="Bez chyb" Checked="FilterRadio_Checked" Margin="0,0,10,0"/>
+                    <RadioButton x:Name="FilterErrorRadio" Content="Jen chyby" Checked="FilterRadio_Checked"/>
+                </StackPanel>
             </StackPanel>
-            
-            <!-- Filtr zobrazeni -->
-            <StackPanel Orientation="Horizontal" Margin="0,5,0,5">
-                <TextBlock Text="Zobrazení:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                <RadioButton x:Name="FilterAllRadio" Content="Vše" IsChecked="True" Checked="FilterRadio_Checked" Margin="0,0,10,0"/>
-                <RadioButton x:Name="FilterNoErrorRadio" Content="Bez chyb" Checked="FilterRadio_Checked" Margin="0,0,10,0"/>
-                <RadioButton x:Name="FilterErrorRadio" Content="Jen chyby" Checked="FilterRadio_Checked"/>
-            </StackPanel>
 
-        </StackPanel>
+            <!-- Statistiky zarovnane doprava -->
+            <Grid Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-        <!-- Panel pro navigaci mezi vysledky -->
+                    <!-- Levy sloupec -->
+                    <StackPanel Grid.Column="0">
+                        <TextBlock x:Name="StatsTotalBytes" Text="Celkový počet bajtů: -" Margin="10,0" FontWeight="Bold"/>
+                        <TextBlock x:Name="StatsErrors" Text="Počet bajtů s chybou: -" Margin="10,0"/>
+                        <TextBlock x:Name="StatsAvgDuration" Text="Průměrná délka bajtu: -" Margin="10,0"/>
+                        <TextBlock x:Name="StatsBaudRate" Text="Odhadovaná rychlost (baud): -" Margin="10,0"/>
+                    </StackPanel>
+
+
+                    <!-- Pravy sloupec -->
+                    <StackPanel Grid.Column="1">
+                        <TextBlock x:Name="StatsSpacer" Text=" " Margin="10,0" />
+                        <TextBlock x:Name="StatsMinMaxDuration" Text="Délka bajtu (min/max): -" Margin="10,0"/>
+                        <TextBlock x:Name="StatsSpiTransfers" Text="Počet SPI přenosů (CS aktivní): -" Margin="10,0"/>
+                        <TextBlock x:Name="StatsMosiMiso" Text="Bajty MOSI / MISO: -" Margin="10,0"/>
+                    </StackPanel>
+                </Grid>
+        </Grid>
+
+        <!-- Panel pro navigaci nalezu -->
         <StackPanel Orientation="Horizontal" Grid.Row="2" Margin="10"
                     VerticalAlignment="Center" HorizontalAlignment="Left" x:Name="ResultNavigationPanel">
             <Button Content="←" Width="40" Click="PrevResult_Click" Margin="5,0"/>
@@ -74,11 +105,11 @@
             <TextBlock x:Name="ResultInfo" Text="Vysledek" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="Bold"/>
         </StackPanel>
 
-        <!-- Graf a merici info -->
+        <!-- Graf a merici informace -->
         <Grid Grid.Row="3" Margin="10">
             <ScottPlot:WpfPlot Name="plot"/>
 
-            <!-- Informace o mereni -->
+            <!-- Zobrazena casova vzdalenost mezi dvema body -->
             <TextBlock x:Name="MeasurementInfo"
                        VerticalAlignment="Top"
                        HorizontalAlignment="Left"
