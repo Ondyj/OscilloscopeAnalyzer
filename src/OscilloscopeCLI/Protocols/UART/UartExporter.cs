@@ -25,7 +25,7 @@ public class UartExporter {
     /// <param name="path">Cesta k vystupnimu CSV souboru.</param>
     public void ExportToCsv(string path) {
         using var writer = new StreamWriter(path);
-        writer.WriteLine("Timestamp [s];Channel;Byte (hex);ASCII;Error");
+        writer.WriteLine("Timestamp [s];Channel;Byte (hex);Byte (dec);ASCII;Error");
 
         foreach (var b in decodedBytes) {
             string timestamp = b.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
@@ -34,12 +34,13 @@ public class UartExporter {
                 ? channelRenameMap[originalChannel]
                 : originalChannel;
             string hex = $"0x{b.Value:X2}";
+            string dec = b.Value.ToString();
             string ascii = (b.Value >= 32 && b.Value <= 126)
                 ? ((char)b.Value).ToString()
                 : $"\\x{b.Value:X2}";
             string error = b.Error ?? "";
 
-            writer.WriteLine($"{timestamp};{renamedChannel};{hex};{ascii};{error}");
+            writer.WriteLine($"{timestamp};{renamedChannel};{hex};{dec};{ascii};{error}");
         }
     }
 }

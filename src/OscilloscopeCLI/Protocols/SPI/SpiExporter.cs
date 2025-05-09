@@ -27,13 +27,14 @@ public class SpiExporter {
         using var writer = new StreamWriter(path);
 
         if (hasMiso)
-            writer.WriteLine("Timestamp [s];MOSI (hex);MISO (hex);ASCII;Error");
+            writer.WriteLine("Timestamp [s];MOSI (hex);MOSI (dec);MISO (hex);MISO (dec);ASCII;Error");
         else
-            writer.WriteLine("Timestamp [s];MOSI (hex);ASCII;Error");
+            writer.WriteLine("Timestamp [s];MOSI (hex);MOSI (dec);ASCII;Error");
 
         foreach (var b in decodedBytes) {
             string timestamp = b.Timestamp.ToString("F9", CultureInfo.InvariantCulture);
             string mosiHex = $"0x{b.ValueMOSI:X2}";
+            string mosiDec = b.ValueMOSI.ToString();
             string asciiChar = (b.ValueMOSI >= 32 && b.ValueMOSI <= 126)
                 ? ((char)b.ValueMOSI).ToString()
                 : $"\\x{b.ValueMOSI:X2}";
@@ -41,9 +42,10 @@ public class SpiExporter {
 
             if (hasMiso) {
                 string misoHex = $"0x{b.ValueMISO:X2}";
-                writer.WriteLine($"{timestamp};{mosiHex};{misoHex};{asciiChar};{error}");
+                string misoDec = b.ValueMISO.ToString();
+                writer.WriteLine($"{timestamp};{mosiHex};{mosiDec};{misoHex};{misoDec};{asciiChar};{error}");
             } else {
-                writer.WriteLine($"{timestamp};{mosiHex};{asciiChar};{error}");
+                writer.WriteLine($"{timestamp};{mosiHex};{mosiDec};{asciiChar};{error}");
             }
         }
     }
