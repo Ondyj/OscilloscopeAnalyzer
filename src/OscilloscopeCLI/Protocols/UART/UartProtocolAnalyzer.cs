@@ -49,23 +49,15 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
         DecodedBytes.Clear();
         if (channelSamples.Count == 0) return;
 
-        Console.WriteLine("[UART] Zahajeni analyzy...");
-        Stopwatch stopwatch = Stopwatch.StartNew();
-
-
         double bitTime = 1.0 / settings.BaudRate;
         bool idleLevel = settings.IdleLevelHigh;
 
         foreach (var (channelName, samples) in channelSamples) {
-            Stopwatch channelWatch = Stopwatch.StartNew();
             AnalyzeChannel(channelName, samples, bitTime, idleLevel);
-            channelWatch.Stop();
         }
 
         matchSearcher = new UartMatchSearcher(DecodedBytes);
         exporter = new UartExporter(DecodedBytes, channelRenameMap);
-        stopwatch.Stop();
-    Console.WriteLine($"[UART] Analyza dokoncena za {stopwatch.Elapsed.TotalMilliseconds:F2} ms. Dekodovano {DecodedBytes.Count} bajtu.");
     }
 
     /// <summary>

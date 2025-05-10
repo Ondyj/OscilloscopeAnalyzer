@@ -45,9 +45,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     public void Analyze() {
         var globalWatch = Stopwatch.StartNew();
         DecodedBytes.Clear();
-        Console.WriteLine("[SPI] Zahájena analýza...");
 
-        var sw = Stopwatch.StartNew();
         var sclkAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Clock);
         var mosiAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Mosi);
 
@@ -60,41 +58,30 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         if (hasMiso)
             misoAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Miso!);
 
-        sw.Stop();
-        Console.WriteLine($"[SPI] Priprava analyzatoru trvala {sw.Elapsed.TotalMilliseconds:F2} ms");
 
         // Detekce hran SCLK
-        sw.Restart();
         var sclkEdges = sclkAnalyzer.DetectTransitions().Where(t => {
             if (!settings.Cpha)
                 return settings.Cpol ? t.From == 1 && t.To == 0 : t.From == 0 && t.To == 1;
             else
                 return settings.Cpol ? t.From == 0 && t.To == 1 : t.From == 1 && t.To == 0;
         }).ToList();
-        sw.Stop();
-        Console.WriteLine($"[SPI] Detekce hran SCLK trvala {sw.Elapsed.TotalMilliseconds:F2} ms");
 
         List<(double StartTime, double EndTime)> transferWindows;
 
         if (csAnalyzer != null) {
             // Pouzij CS LOW jako prenosove okno
-            sw.Restart();
             transferWindows = csAnalyzer.GetConstantLevelSegments().Where(seg => seg.Value == 0)
                 .Select(seg => (seg.StartTime, seg.EndTime)).ToList();
-            sw.Stop();
-            Console.WriteLine($"[SPI] Detekce přenosů (CS LOW) trvala {sw.Elapsed.TotalMilliseconds:F2} ms");
         } else {
             // Bez CS – cely rozsah jako jedno prenosove okno
             double start = signalData[mapping.Clock].First().Time;
             double end = signalData[mapping.Clock].Last().Time;
             transferWindows = new() { (start, end) };
-            Console.WriteLine("[SPI] CS není přítomen – analyzuji celý rozsah.");
         }
 
-        Console.WriteLine($"[SPI] Přenosů: {transferWindows.Count}, hran SCLK: {sclkEdges.Count}");
 
         // Dekodovani dat
-        sw.Restart();
         int edgeIndex = 0;
         var mosiReader = new SignalReader(mosiAnalyzer.GetSamples());
         SignalReader? misoReader = hasMiso && misoAnalyzer != null ? new SignalReader(misoAnalyzer.GetSamples()) : null;
@@ -112,13 +99,6 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
 
             AnalyzeTransfer(edges, mosiReader, misoReader, startTime, endTime);
         }
-        sw.Stop();
-        Console.WriteLine($"[SPI] Dekódování všech přenosů trvalo {sw.Elapsed.TotalMilliseconds:F2} ms");
-
-        globalWatch.Stop();
-        Console.WriteLine($"[SPI] Analýza dokončena za {globalWatch.Elapsed.TotalMilliseconds:F2} ms.");
-        Console.WriteLine($"[SPI] Dekódováno {DecodedBytes.Count} bajtů.");
-
         TransferCount = transferWindows.Count;
         if (transferWindows.Count > 0) {
             AvgTransferDurationUs = transferWindows.Average(t => (t.EndTime - t.StartTime) * 1e6);
