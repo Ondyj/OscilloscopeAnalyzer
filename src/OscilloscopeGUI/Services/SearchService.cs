@@ -16,6 +16,7 @@ namespace OscilloscopeGUI.Services {
         private UIElement? navigationPanel;
         private Action? updateAnnotationsCallback;
         private Func<ByteFilterMode>? getFilterModeCallback;
+        private byte[]? searchedSequence = null;
 
         /// <summary>
         /// Inicializuje novou instanci tridy SearchService s odkazem na graf a navigaci.
@@ -47,39 +48,50 @@ namespace OscilloscopeGUI.Services {
         public void Search(string query) {
             if (analyzer == null) return;
 
-            byte value;
-            string trimmed = query.Trim();
+            string[] parts = query.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            List<byte> byteList = new();
 
-            // HEX: začíná na 0x nebo 0X
-            if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) {
-                string hexPart = trimmed.Substring(2);
-                if (!byte.TryParse(hexPart, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value)) {
+            foreach (string part in parts) {
+                string trimmed = part.Trim();
+
+                if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) {
+                    if (byte.TryParse(trimmed.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
+                        byteList.Add(b);
+                    else {
+                        ShowInvalidInput(trimmed);
+                        return;
+                    }
+                }
+                else if (trimmed.Length == 1 && !char.IsDigit(trimmed[0])) {
+                    byteList.Add((byte)trimmed[0]);
+                }
+                else if (byte.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out byte b2)) {
+                    byteList.Add(b2);
+                }
+                else {
                     ShowInvalidInput(trimmed);
                     return;
                 }
             }
-            // ASCII znak (pouze jeden znak)
-            else if (trimmed.Length == 1) {
-                value = (byte)trimmed[0];
-            }
-            // Dessitkova hodnota
-            else if (byte.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out value)) {
-                // OK
-            }
-            else {
-                ShowInvalidInput(trimmed);
+
+            if (byteList.Count == 0) {
+                ShowInvalidInput(query);
                 return;
             }
+
+            var sequence = byteList.ToArray();
+
+            searchedSequence = sequence;
             var mode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
-            searchedValue = value;
-            analyzer.Search(value, mode);
+            analyzer.Search(sequence, mode);
 
             if (analyzer.HasMatches()) {
                 currentMatchIndex = 0;
                 ShowMatch();
                 if (navigationPanel != null) navigationPanel.Visibility = Visibility.Visible;
-            } else {
-                MessageBox.Show($"Hodnota {FormatByte(value)} nebyla nalezena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else {
+                MessageBox.Show($"Sekvence nebyla nalezena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
@@ -97,15 +109,15 @@ namespace OscilloscopeGUI.Services {
         /// Zobrazi aktualni nalezenou hodnotu v grafu a posune se na ni.
         /// </summary>
         public void ShowMatch() {
-            if (analyzer == null || searchedValue == null)
+            if (analyzer == null || searchedSequence == null || searchedSequence.Length == 0)
                 return;
 
             var mode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
-            analyzer.Search(searchedValue.Value, mode);
+            analyzer.Search(searchedSequence, mode);
 
             if (!analyzer.HasMatches()) {
                 MessageBox.Show(
-                    $"Hodnota {FormatByte(searchedValue.Value)} nebyla nalezena pro aktuální filtr.",
+                    $"Sekvence nebyla nalezena pro aktuální filtr.",
                     "Žádné výsledky",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information
@@ -179,6 +191,11 @@ namespace OscilloscopeGUI.Services {
         }
         public void SetUpdateCallback(Action updateAnnotations) {
             updateAnnotationsCallback = updateAnnotations;
+        }
+
+        public void RefreshSearch() {
+            if (searchedSequence != null)
+                ShowMatch();
         }
     }
 }

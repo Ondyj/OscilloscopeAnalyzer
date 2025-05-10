@@ -245,6 +245,7 @@ namespace OscilloscopeGUI {
                 };
             }
 
+            searchService.RefreshSearch();
             UpdateAnnotations();
         }
 

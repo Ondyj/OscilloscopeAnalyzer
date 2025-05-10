@@ -203,7 +203,8 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
 
     // --- IMPLEMENTACE INTERFACU ---
 
-    public void Search(byte value, ByteFilterMode filterMode) => matchSearcher.Search(value, filterMode);
+    public void Search(byte[] sequence, ByteFilterMode filterMode) => matchSearcher.Search(sequence, filterMode);
+
     public bool HasMatches() => matchSearcher.HasMatches();
     public int MatchCount => matchSearcher.MatchCount;
     public string GetMatchDisplay(int index) => matchSearcher.GetMatchDisplay(index);

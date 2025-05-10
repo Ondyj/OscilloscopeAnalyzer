@@ -13,7 +13,7 @@ namespace OscilloscopeCLI.Protocols {
         /// Vyhleda vsechny shody pro zadanou hodnotu.
         /// </summary>
         /// <param name="value">Hledana hodnota bajtu.</param>
-        void Search(byte value, ByteFilterMode filterMode);
+        void Search(byte[] sequence, ByteFilterMode filterMode);
 
         /// <summary>
         /// Vrati, zda existuji nejake nalezene shody.
