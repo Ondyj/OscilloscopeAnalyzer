@@ -162,11 +162,21 @@ namespace OscilloscopeGUI {
 
                     var color = (i % 2 == 0) ? startColor : altColor;
 
-                    var text = plot.Plot.Add.Text(FormatByte(b.ValueMOSI), centerX, 1.3);
-                    text.LabelStyle.FontSize = 16;
-                    text.LabelStyle.Bold = true;
-                    text.LabelFontColor = color;
-                    byteLabels.Add(text);
+                    // MOSI – nahoru
+                    var textMosi = plot.Plot.Add.Text(FormatByte(b.ValueMOSI), centerX, 1.3);
+                    textMosi.LabelStyle.FontSize = 16;
+                    textMosi.LabelStyle.Bold = true;
+                    textMosi.LabelFontColor = color;
+                    byteLabels.Add(textMosi);
+
+                    // MISO – dolu pod graf
+                    if (b.HasMISO) {
+                        var textMiso = plot.Plot.Add.Text(FormatByte(b.ValueMISO), centerX, -1.5);
+                        textMiso.LabelStyle.FontSize = 16;
+                        textMiso.LabelStyle.Bold = true;
+                        textMiso.LabelFontColor = color;
+                        byteLabels.Add(textMiso);
+                    }
 
                     var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
                     lineStart.Color = color;
@@ -699,9 +709,13 @@ namespace OscilloscopeGUI {
         }
 
         private void ResetStatistics() {
-            StatsTotalBytes.Text = "Celkem: –";
-            StatsErrors.Text = "Chyby: –";
-            StatsAvgDuration.Text = "Prumerna delka: –";
+            StatsTotalBytes.Text = "Celkový počet bajtů: –";
+            StatsErrors.Text = "Počet bajtů s chybou: –";
+            StatsAvgDuration.Text = "Průměrná délka bajtu: –";
+            StatsBaudRate.Text = "Odhadovaná rychlost (baud): –";
+            StatsMinMaxDuration.Text = "Délka bajtu (min/max): –";
+            StatsSpiTransfers.Text = "Počet SPI přenosů (CS aktivní): –";
+            StatsMosiMiso.Text = "Bajty MOSI / MISO: –";
         }
 
     }
