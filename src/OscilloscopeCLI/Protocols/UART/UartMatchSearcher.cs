@@ -22,8 +22,15 @@ public class UartMatchSearcher {
     /// Vyhleda vsechny bajty, ktere odpovidaji zadane hodnote.
     /// </summary>
     /// <param name="value">Hledana hodnota bajtu.</param>
-    public void Search(byte value) {
-        matches = decodedBytes.FindAll(b => b.Value == value);
+    public void Search(byte value, ByteFilterMode filterMode) {
+        matches = decodedBytes
+            .Where(b => b.Value == value)
+            .Where(b =>
+                filterMode == ByteFilterMode.All ||
+                (filterMode == ByteFilterMode.OnlyErrors && !string.IsNullOrEmpty(b.Error)) ||
+                (filterMode == ByteFilterMode.NoErrors && string.IsNullOrEmpty(b.Error))
+            )
+            .ToList();
     }
 
     /// <summary>

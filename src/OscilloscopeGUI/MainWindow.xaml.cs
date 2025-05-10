@@ -702,7 +702,16 @@ namespace OscilloscopeGUI {
 
             if (analyzer is ISearchableAnalyzer searchable) {
                 searchService.SetAnalyzer(searchable);
-                searchService.SetUpdateCallback(UpdateAnnotations); // ← zde nastavíš callback
+                searchService.SetUpdateCallback(UpdateAnnotations);
+
+                searchService.SetFilterCallback(() => {
+                    if (FilterErrorRadio?.IsChecked == true)
+                        return ByteFilterMode.OnlyErrors;
+                    else if (FilterNoErrorRadio?.IsChecked == true)
+                        return ByteFilterMode.NoErrors;
+                    else
+                        return ByteFilterMode.All;
+                });
             } else {
                 searchService.Reset();
             }

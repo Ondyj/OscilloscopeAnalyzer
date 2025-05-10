@@ -1,4 +1,10 @@
 namespace OscilloscopeCLI.Protocols {
+
+    public enum ByteFilterMode {
+        All,
+        OnlyErrors,
+        NoErrors
+    }
     /// <summary>
     /// Rozhrani pro analyzatory, ktere umoznuji hledani a praci s nalezenymi shodami.
     /// </summary>
@@ -7,7 +13,7 @@ namespace OscilloscopeCLI.Protocols {
         /// Vyhleda vsechny shody pro zadanou hodnotu.
         /// </summary>
         /// <param name="value">Hledana hodnota bajtu.</param>
-        void Search(byte value);
+        void Search(byte value, ByteFilterMode filterMode);
 
         /// <summary>
         /// Vrati, zda existuji nejake nalezene shody.

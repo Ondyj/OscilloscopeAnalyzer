@@ -21,9 +21,14 @@ public class SpiMatchSearcher {
     /// Vyhleda vsechny bajty, ktere odpovidaji zadane hodnote na MOSI nebo MISO.
     /// </summary>
     /// <param name="value">Hledana hodnota bajtu.</param>
-    public void Search(byte value) {
+    public void Search(byte value, ByteFilterMode filterMode) {
         matches = decodedBytes
-            .Where(b => b.ValueMOSI == value || b.ValueMISO == value)
+            .Where(b => (b.ValueMOSI == value || b.ValueMISO == value))
+            .Where(b =>
+                filterMode == ByteFilterMode.All ||
+                (filterMode == ByteFilterMode.OnlyErrors && !string.IsNullOrEmpty(b.Error)) ||
+                (filterMode == ByteFilterMode.NoErrors && string.IsNullOrEmpty(b.Error))
+            )
             .ToList();
     }
 

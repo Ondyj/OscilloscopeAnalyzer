@@ -5,12 +5,6 @@ using OscilloscopeCLI.Protocols;
 using System.Globalization;
 
 namespace OscilloscopeGUI.Services {
-
-    public enum ByteFilterMode {
-        All,
-        OnlyErrors,
-        NoErrors
-    }
     public class SearchService {
         private readonly WpfPlot plot;
         private readonly PlotNavigationService navService;
@@ -76,9 +70,9 @@ namespace OscilloscopeGUI.Services {
                 ShowInvalidInput(trimmed);
                 return;
             }
-
+            var mode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
             searchedValue = value;
-            analyzer.Search(value);
+            analyzer.Search(value, mode);
 
             if (analyzer.HasMatches()) {
                 currentMatchIndex = 0;
@@ -95,7 +89,7 @@ namespace OscilloscopeGUI.Services {
 
         private string FormatByte(byte b) {
             string ascii = (b >= 32 && b <= 126) ? ((char)b).ToString() : $"\\x{b:X2}";
-            return $"0x{b:X2} / {b} / {ascii}";
+            return $"0x{b:X2} | {b} | {ascii}";
         }
 
 
@@ -103,8 +97,21 @@ namespace OscilloscopeGUI.Services {
         /// Zobrazi aktualni nalezenou hodnotu v grafu a posune se na ni.
         /// </summary>
         public void ShowMatch() {
-            if (analyzer == null || searchedValue == null || !analyzer.HasMatches())
+            if (analyzer == null || searchedValue == null)
                 return;
+
+            var mode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
+            analyzer.Search(searchedValue.Value, mode);
+
+            if (!analyzer.HasMatches()) {
+                MessageBox.Show(
+                    $"Hodnota {FormatByte(searchedValue.Value)} nebyla nalezena pro aktuální filtr.",
+                    "Žádné výsledky",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
+                return;
+            }
 
             double timestamp = analyzer.GetMatchTimestamp(currentMatchIndex);
             string label = analyzer.GetMatchDisplay(currentMatchIndex);
