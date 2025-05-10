@@ -113,6 +113,10 @@ namespace OscilloscopeGUI.Services {
                 return;
             }
 
+            // Ochrana: pokud currentMatchIndex je mimo rozsah
+            if (currentMatchIndex >= analyzer.MatchCount)
+                currentMatchIndex = 0;
+
             double timestamp = analyzer.GetMatchTimestamp(currentMatchIndex);
             string label = analyzer.GetMatchDisplay(currentMatchIndex);
 
@@ -134,8 +138,10 @@ namespace OscilloscopeGUI.Services {
         /// Presune se na dalsi vysledek vyhledavani.
         /// </summary>
         public void NextMatch() {
-            if (analyzer == null || analyzer.MatchCount == 0)
+            if (analyzer == null || analyzer.MatchCount == 0) {
+                MessageBox.Show("Žádná další nalezená hodnota.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
+            }
 
             currentMatchIndex = (currentMatchIndex + 1) % analyzer.MatchCount;
             ShowMatch();
@@ -144,8 +150,10 @@ namespace OscilloscopeGUI.Services {
         /// Presune se na predchozi vysledek vyhledavani.
         /// </summary>
         public void PreviousMatch() {
-            if (analyzer == null || analyzer.MatchCount == 0)
+            if (analyzer == null || analyzer.MatchCount == 0) {
+                MessageBox.Show("Žádná předchozí nalezená hodnota.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
+            }
 
             currentMatchIndex = (currentMatchIndex - 1 + analyzer.MatchCount) % analyzer.MatchCount;
             ShowMatch();

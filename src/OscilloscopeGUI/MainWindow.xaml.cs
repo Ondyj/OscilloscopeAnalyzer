@@ -34,7 +34,7 @@ namespace OscilloscopeGUI {
 
         private enum ByteDisplayFormat { Hex, Dec, Ascii }
         private ByteDisplayFormat currentFormat = ByteDisplayFormat.Hex;
-
+        private bool? wasManualAnalysis = null;
         private List<UartDecodedByte>? filteredUartBytes = null;
         private List<SpiDecodedByte>? filteredSpiBytes = null;
         private double? timeMark1 = null;
@@ -409,6 +409,11 @@ namespace OscilloscopeGUI {
                 : loader.SignalData;
 
             await plotter.PlotSignalsAsync(finalData, progress);
+
+            double minTime = finalData.Values.SelectMany(list => list.Select(p => p.Time)).Min();
+            double maxTime = finalData.Values.SelectMany(list => list.Select(p => p.Time)).Max();
+            double duration = maxTime - minTime;
+            navService.SetZoomOutLimitBasedOnDuration(duration);
             navService.ResetView(plotter.EarliestTime);
             progressDialog.Finish("Vykreslování dokončeno.", autoClose: true);
             progressDialog.OnOkClicked = () => progressDialog.Close();
@@ -421,6 +426,7 @@ namespace OscilloscopeGUI {
         private void AnalyzeButton_Click(object sender, RoutedEventArgs e) {
             string selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "";
             bool isManual = ManualRadio.IsChecked == true;
+            wasManualAnalysis = ManualRadio.IsChecked == true;
 
             // 1 kanal → jen UART, 2 kanaly → UART i SPI, 3+ kanaly → jen SPI
             if (!CheckChannelCount(selectedProtocol, loader.SignalData.Count))
@@ -658,6 +664,12 @@ namespace OscilloscopeGUI {
                 StatsMosiMiso.Text = $"Bajty MOSI / MISO: {total - misoBytes} / {misoBytes}";
             }
 
+            if (wasManualAnalysis.HasValue) {
+                StatsAnalysisMode.Text = $"Režim analýzy: {(wasManualAnalysis.Value ? "Ručně" : "Auto")}";
+            } else {
+                StatsAnalysisMode.Text = "Režim analýzy: –";
+            }
+
             StatsTotalBytes.Text = $"Celkový počet bajtů: {total}";
             StatsErrors.Text = $"Počet bajtů s chybou: {errors}";
             StatsAvgDuration.Text = $"Průměrná délka bajtu: {avgDurationUs:F1} µs";
@@ -725,6 +737,8 @@ namespace OscilloscopeGUI {
             StatsMinMaxDuration.Text = "Délka bajtu (min/max): –";
             StatsSpiTransfers.Text = "Počet SPI přenosů (CS aktivní): –";
             StatsMosiMiso.Text = "Bajty MOSI / MISO: –";
+            StatsAnalysisMode.Text = "Režim analýzy: –"; 
+            wasManualAnalysis = null;
         }
 
     }

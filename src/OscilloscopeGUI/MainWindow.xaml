@@ -89,7 +89,7 @@
 
                     <!-- Pravy sloupec -->
                     <StackPanel Grid.Column="1">
-                        <TextBlock x:Name="StatsSpacer" Text=" " Margin="10,0" />
+                        <TextBlock x:Name="StatsAnalysisMode" Text="Režim analýzy: –" Margin="10,0"/>
                         <TextBlock x:Name="StatsMinMaxDuration" Text="Délka bajtu (min/max): -" Margin="10,0"/>
                         <TextBlock x:Name="StatsSpiTransfers" Text="Počet SPI přenosů (CS aktivní): -" Margin="10,0"/>
                         <TextBlock x:Name="StatsMosiMiso" Text="Bajty MOSI / MISO: -" Margin="10,0"/>
