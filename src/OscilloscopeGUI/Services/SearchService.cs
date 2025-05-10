@@ -10,7 +10,6 @@ namespace OscilloscopeGUI.Services {
         private readonly PlotNavigationService navService;
         private ISearchableAnalyzer? analyzer;
         private int currentMatchIndex = 0;
-        private byte? searchedValue = null;
         private ScottPlot.Plottables.VerticalLine? matchLine = null;
         private TextBlock? resultInfoTextBlock;
         private UIElement? navigationPanel;
@@ -176,7 +175,6 @@ namespace OscilloscopeGUI.Services {
         /// </summary>
         public void Reset() {
             currentMatchIndex = 0;
-            searchedValue = null;
             resultInfoTextBlock?.Dispatcher.Invoke(() => resultInfoTextBlock.Text = "");
 
 
