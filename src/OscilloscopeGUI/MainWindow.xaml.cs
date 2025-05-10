@@ -19,6 +19,7 @@ namespace OscilloscopeGUI {
         private SignalPlotter plotter = null!;
         private PlotNavigationService navService = null!;
         private SearchService searchService = null!;
+        private StatisticsService statisticsService = null!;
 
         // === Stav aplikace ===
         private IProtocolAnalyzer? activeAnalyzer;
@@ -39,19 +40,13 @@ namespace OscilloscopeGUI {
         // === Anotace v grafu ===
         private readonly List<ScottPlot.Plottables.Text> byteLabels = new();
         private readonly List<IPlottable> byteStartLines = new();
+        private readonly AnnotationRendererManager annotationRendererManager = new();
 
         // === Casove znacky ===
         private double? timeMark1 = null;
         private double? timeMark2 = null;
         private ScottPlot.Plottables.VerticalLine? line1 = null;
         private ScottPlot.Plottables.VerticalLine? line2 = null;
-
-        // === Enum pro zobrazeni formatu bajtu ===
-        private enum ByteDisplayFormat {
-            Hex,
-            Dec,
-            Ascii
-        }
 
         /// <summary>
         /// Konstruktor hlavniho okna aplikace
@@ -60,6 +55,17 @@ namespace OscilloscopeGUI {
             InitializeComponent();
             InitializePlot();
             InitializeEvents();
+
+            statisticsService = new StatisticsService(
+                StatsTotalBytes,
+                StatsErrors,
+                StatsAvgDuration,
+                StatsBaudRate,
+                StatsMinMaxDuration,
+                StatsSpiTransfers,
+                StatsMosiMiso,
+                StatsAnalysisMode
+            );
         }
 
         /// <summary>
@@ -120,6 +126,7 @@ namespace OscilloscopeGUI {
         /// Aktualizuje anotace v grafu podle aktualne vybraneho analyzatoru
         /// </summary>
         private void UpdateAnnotations() {
+            // Smazat predchozi anotace
             foreach (var label in byteLabels)
                 plot.Plot.Remove(label);
             byteLabels.Clear();
@@ -131,115 +138,11 @@ namespace OscilloscopeGUI {
             if (activeAnalyzer is null)
                 return;
 
-            if (activeAnalyzer is UartProtocolAnalyzer)
-                RenderUartAnnotations();
-            else if (activeAnalyzer is SpiProtocolAnalyzer)
-                RenderSpiAnnotations();
+            // Vybrat renderer podle typu analyzatoru
+            var renderer = annotationRendererManager.GetRendererFor(activeAnalyzer);
+            renderer?.Render(activeAnalyzer, plot.Plot, currentFormat, byteLabels, byteStartLines);
 
             plot.Refresh();
-        }
-
-        /// <summary>
-        /// Vykresli anotace bajtu a prislusne vertikalni cary pro UART analyzator
-        /// </summary>
-        private void RenderUartAnnotations() {
-            if (activeAnalyzer is not UartProtocolAnalyzer uart)
-                return;
-
-            var limits = plot.Plot.Axes.GetLimits();
-            double xMin = limits.Left;
-            double xMax = limits.Right;
-
-            var bytes = filteredUartBytes ?? uart.DecodedBytes;
-            for (int i = 0; i < bytes.Count; i++) {
-                var b = bytes[i];
-                double centerX = (b.StartTime + b.EndTime) / 2;
-                if (centerX < xMin || centerX > xMax)
-                    continue;
-
-                var color = (i % 2 == 0) ? ScottPlot.Colors.Gray : ScottPlot.Colors.Black;
-
-                var text = plot.Plot.Add.Text(FormatByte(b.Value), centerX, 1.3);
-                text.LabelStyle.FontSize = 16;
-                text.LabelStyle.Bold = true;
-                text.LabelFontColor = color;
-                byteLabels.Add(text);
-
-                var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
-                lineStart.Color = color;
-                lineStart.LineWidth = 1;
-                lineStart.LinePattern = ScottPlot.LinePattern.Dashed;
-                byteStartLines.Add(lineStart);
-
-                var lineEnd = plot.Plot.Add.VerticalLine(b.EndTime);
-                lineEnd.Color = color;
-                lineEnd.LineWidth = 1;
-                lineEnd.LinePattern = ScottPlot.LinePattern.Dashed;
-                byteStartLines.Add(lineEnd);
-            }
-        }
-
-        /// <summary>
-        /// Vykresli anotace bajtu (MOSI a MISO) a prislusne cary pro SPI analyzator
-        /// </summary>
-        private void RenderSpiAnnotations() {
-            if (activeAnalyzer is not SpiProtocolAnalyzer spi)
-                return;
-
-            var limits = plot.Plot.Axes.GetLimits();
-            double xMin = limits.Left;
-            double xMax = limits.Right;
-
-            var bytes = filteredSpiBytes ?? spi.DecodedBytes;
-            for (int i = 0; i < bytes.Count; i++) {
-                var b = bytes[i];
-                double centerX = (b.StartTime + b.EndTime) / 2;
-                if (centerX < xMin || centerX > xMax)
-                    continue;
-
-                var color = (i % 2 == 0) ? ScottPlot.Colors.Gray : ScottPlot.Colors.Black;
-
-                var textMosi = plot.Plot.Add.Text(FormatByte(b.ValueMOSI), centerX, 1.3);
-                textMosi.LabelStyle.FontSize = 16;
-                textMosi.LabelStyle.Bold = true;
-                textMosi.LabelFontColor = color;
-                byteLabels.Add(textMosi);
-
-                if (b.HasMISO) {
-                    var textMiso = plot.Plot.Add.Text(FormatByte(b.ValueMISO), centerX, -1.5);
-                    textMiso.LabelStyle.FontSize = 16;
-                    textMiso.LabelStyle.Bold = true;
-                    textMiso.LabelFontColor = color;
-                    byteLabels.Add(textMiso);
-                }
-
-                var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
-                lineStart.Color = color;
-                lineStart.LineWidth = 1;
-                lineStart.LinePattern = ScottPlot.LinePattern.Dashed;
-                byteStartLines.Add(lineStart);
-
-                var lineEnd = plot.Plot.Add.VerticalLine(b.EndTime);
-                lineEnd.Color = color;
-                lineEnd.LineWidth = 1;
-                lineEnd.LinePattern = ScottPlot.LinePattern.Dashed;
-                byteStartLines.Add(lineEnd);
-            }
-        }
-
-
-        /// <summary>
-        /// Formatuje bajt podle aktualne zvoleneho rezimu zobrazeni (HEX/DEC/ASCII)
-        /// </summary>
-        /// <param name="b">Vstupni bajt</param>
-        /// <returns>Naformatovany retezec pro zobrazeni</returns>
-        private string FormatByte(byte b) {
-            return currentFormat switch {
-                ByteDisplayFormat.Hex => $"0x{b:X2}",
-                ByteDisplayFormat.Dec => b.ToString(),
-                ByteDisplayFormat.Ascii => char.IsControl((char)b) ? "." : ((char)b).ToString(),
-                _ => $"0x{b:X2}"
-            };
         }
   
         /// <summary>
@@ -336,106 +239,24 @@ namespace OscilloscopeGUI {
         /// Nacte CSV soubor, vykresli signal a provede mapovani kanalu podle zvoleneho protokolu
         /// </summary>
         private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
-            
-            // 1. Vyber CSV souboru
-            var filePick = fileLoadingService.PromptForFileOnly(this);
-            if (!filePick.Success)
-                return;
-
-            string selectedFilePath = filePick.FilePath!;
-
             ResetState();
 
-
-            // 2. Nacteni CSV souboru
-            var loadResult = await fileLoadingService.LoadFromFilePathAsync(loader, selectedFilePath, this);
-            if (!loadResult.Success)
+            var result = await fileLoadingService.LoadAndMapAsync(loader, this);
+            if (!result.Success)
                 return;
 
-            loadedFilePath = selectedFilePath;
+            loadedFilePath = result.FilePath;
+            lastUsedUartMapping = result.UartMapping;
+            lastUsedSpiMapping = result.SpiMapping;
 
-            // 3. Ziskani aktivnich kanalu
-            var activeChannels = loader.GetRemainingChannelNames();
-            Console.WriteLine("Aktivní kanály:");
-            foreach (var ch in activeChannels)
-                Console.WriteLine(ch);
+            // připrav data pro vykreslení
+            var finalData = result.RenameMap.Count > 0
+                ? loader.SignalData.ToDictionary(
+                    kvp => result.RenameMap.TryGetValue(kvp.Key, out var newName) ? newName : kvp.Key,
+                    kvp => kvp.Value)
+                : loader.SignalData;
 
-            // 4. Vyber protokolu realny pocet kanalu
-            var protocolDialog = new ProtocolSelectDialog(activeChannels.Count) {
-                Owner = this
-            };
-            if (protocolDialog.ShowDialog() != true)
-                return;
-
-            string selectedProtocol = protocolDialog.SelectedProtocol;
-
-            // 5. Mapovani podle protokolu
-            Dictionary<string, string> renameMap = new();
-            if (selectedProtocol == "SPI") {
-                var defaultMapping = new SpiChannelMapping();
-                Console.WriteLine("[SPI] Výchozí mapování před zadáním uživatele:");
-                Console.WriteLine($"  CS   = {defaultMapping.ChipSelect}");
-                Console.WriteLine($"  SCLK = {defaultMapping.Clock}");
-                Console.WriteLine($"  MOSI = {defaultMapping.Mosi}");
-                Console.WriteLine($"  MISO = {defaultMapping.Miso}");
-
-                var spiMapDialog = new SpiChannelMappingDialog(activeChannels);
-                spiMapDialog.Owner = this;
-                if (spiMapDialog.ShowDialog() != true)
-                    return;
-
-                lastUsedSpiMapping = spiMapDialog.Mapping;
-
-                Console.WriteLine("[SPI] Mapování po výběru uživatele:");
-                Console.WriteLine($"  CS   = {lastUsedSpiMapping.ChipSelect}");
-                Console.WriteLine($"  SCLK = {lastUsedSpiMapping.Clock}");
-                Console.WriteLine($"  MOSI = {lastUsedSpiMapping.Mosi}");
-                Console.WriteLine($"  MISO = {lastUsedSpiMapping.Miso}");
-
-                renameMap = new Dictionary<string, string> {
-                    { lastUsedSpiMapping.ChipSelect, "CS" },
-                    { lastUsedSpiMapping.Clock, "SCLK" },
-                    { lastUsedSpiMapping.Mosi, "MOSI" }
-                };
-                if (!string.IsNullOrEmpty(lastUsedSpiMapping.Miso))
-                    renameMap[lastUsedSpiMapping.Miso] = "MISO";
-            } else if (selectedProtocol == "UART") {
-                var uartMapDialog = new UartChannelMappingDialog(activeChannels);
-                uartMapDialog.Owner = this;
-                if (uartMapDialog.ShowDialog() != true)
-                    return;
-
-                var mapping = uartMapDialog.ChannelRenames;
-                lastUsedUartMapping = new UartChannelMapping {
-                    Tx = mapping.FirstOrDefault(kv => kv.Value == "TX").Key ?? "",
-                    Rx = mapping.FirstOrDefault(kv => kv.Value == "RX").Key ?? ""
-                };
-
-                // podminka pro jednosmerne mapovani
-                if (mapping.Count > 1) {
-                    // jen pokud mám více než 1 přiřazenou roli, vyžaduji obě signály
-                    if (!lastUsedUartMapping.IsValid()) {
-                        MessageBox.Show(
-                            "Mapování UART signálů není validní (TX a RX musí být různé a neprázdné).",
-                            "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
-                        return;
-                    }
-                }
-                else if (mapping.Count == 0) {
-                    // pokud uživatel nevybral ani RX ani TX
-                    MessageBox.Show(
-                        "Musíte vybrat alespoň jednu roli (RX nebo TX).",
-                        "Neúplné mapování", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-                // pokud mapping.Count == 1, bereme jednosměrné měření a nevoláme IsValid
-
-                renameMap = new Dictionary<string, string>();
-                foreach (var kv in mapping)
-                    renameMap[kv.Key] = kv.Value;
-            }
-
-            // 6. Vykresleni signalu (s prejmenovanymi klici)
+            // vykresli
             var progressDialog = new ProgressDialog {
                 Owner = this
             };
@@ -443,22 +264,15 @@ namespace OscilloscopeGUI {
             progressDialog.SetTitle("Vykreslování...");
             progressDialog.SetPhase("Vykreslování");
             progressDialog.ReportMessage("Vykreslování signálu...");
+
             var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
-
-            // pokud existuje renameMap, vytvorime novy slovnik s prejmenovanymi klici
-            var finalData = renameMap.Count > 0
-                ? loader.SignalData.ToDictionary(
-                    kvp => renameMap.TryGetValue(kvp.Key, out var newName) ? newName : kvp.Key,
-                    kvp => kvp.Value)
-                : loader.SignalData;
-
             await plotter.PlotSignalsAsync(finalData, progress);
 
             double minTime = finalData.Values.SelectMany(list => list.Select(p => p.Time)).Min();
             double maxTime = finalData.Values.SelectMany(list => list.Select(p => p.Time)).Max();
-            double duration = maxTime - minTime;
-            navService.SetZoomOutLimitBasedOnDuration(duration);
+            navService.SetZoomOutLimitBasedOnDuration(maxTime - minTime);
             navService.ResetView(plotter.EarliestTime);
+
             progressDialog.Finish("Vykreslování dokončeno.", autoClose: true);
             progressDialog.OnOkClicked = () => progressDialog.Close();
         }
@@ -730,7 +544,7 @@ namespace OscilloscopeGUI {
             MeasurementInfo.Text = "";
             MeasurementInfo.Visibility = Visibility.Collapsed;
 
-            ResetStatistics();
+            statisticsService.Reset();
 
             plot.Plot.Clear();
             plot.Refresh();
@@ -743,10 +557,10 @@ namespace OscilloscopeGUI {
         /// </summary>
         private void UpdateStatistics() {
             if (activeAnalyzer is UartProtocolAnalyzer uart) {
-                UpdateUartStats(uart);
+                statisticsService.UpdateUartStats(uart, filteredUartBytes);
             }
             else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
-                UpdateSpiStats(spi);
+                statisticsService.UpdateSpiStats(spi, filteredSpiBytes);
             }
 
             if (wasManualAnalysis.HasValue) {
@@ -754,68 +568,6 @@ namespace OscilloscopeGUI {
             } else {
                 StatsAnalysisMode.Text = "Režim analýzy: –";
             }
-        }
-
-        /// <summary>
-        /// Vypocita a zobrazi statistiky pro UART analyzator
-        /// </summary>
-        private void UpdateUartStats(UartProtocolAnalyzer uart) {
-            var bytes = filteredUartBytes ?? uart.DecodedBytes;
-            int total = bytes.Count;
-            int errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
-            double avgDurationUs = total > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-            double minUs = total > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-            double maxUs = total > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-
-            double bitsPerByte = uart.Settings.DataBits + 1 + (uart.Settings.Parity == Parity.None ? 0 : 1) + uart.Settings.StopBits;
-            double avgBaud = avgDurationUs > 0 ? (bitsPerByte * 1_000_000.0 / avgDurationUs) : 0;
-
-            StatsBaudRate.Text = $"Odhadovaná přenosová rychlost: {avgBaud:F0} baud";
-            StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
-            StatsSpiTransfers.Text = "Počet přenosů (SPI): –";
-            StatsMosiMiso.Text = "Počet bajtů MOSI/MISO: –";
-            StatsTotalBytes.Text = $"Celkový počet bajtů: {total}";
-            StatsErrors.Text = $"Počet bajtů s chybou: {errors}";
-            StatsAvgDuration.Text = $"Průměrná délka bajtu: {avgDurationUs:F1} µs";
-        }
-
-        /// <summary>
-        /// Vypocita a zobrazi statistiky pro SPI analyzator
-        /// </summary>
-        private void UpdateSpiStats(SpiProtocolAnalyzer spi) {
-            var bytes = filteredSpiBytes ?? spi.DecodedBytes;
-            int total = bytes.Count;
-            int errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
-            double avgDurationUs = total > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-            double minUs = total > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-            double maxUs = total > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-
-            int transferCount = spi.TransferCount;
-            double avgTransferLength = spi.AvgTransferDurationUs;
-            int misoBytes = bytes.Count(b => b.HasMISO);
-
-            StatsBaudRate.Text = $"Prům. délka SPI přenosu: {avgTransferLength:F1} µs";
-            StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
-            StatsSpiTransfers.Text = $"Počet přenosů (CS aktivní): {transferCount}";
-            StatsMosiMiso.Text = $"Bajty MOSI / MISO: {total - misoBytes} / {misoBytes}";
-            StatsTotalBytes.Text = $"Celkový počet bajtů: {total}";
-            StatsErrors.Text = $"Počet bajtů s chybou: {errors}";
-            StatsAvgDuration.Text = $"Průměrná délka bajtu: {avgDurationUs:F1} µs";
-        }
-
-        /// <summary>
-        /// Vynuluje vsechny statistiky v GUI
-        /// </summary>
-        private void ResetStatistics() {
-            StatsTotalBytes.Text = "Celkový počet bajtů: –";
-            StatsErrors.Text = "Počet bajtů s chybou: –";
-            StatsAvgDuration.Text = "Průměrná délka bajtu: –";
-            StatsBaudRate.Text = "Odhadovaná rychlost (baud): –";
-            StatsMinMaxDuration.Text = "Délka bajtu (min/max): –";
-            StatsSpiTransfers.Text = "Počet SPI přenosů (CS aktivní): –";
-            StatsMosiMiso.Text = "Bajty MOSI / MISO: –";
-            StatsAnalysisMode.Text = "Režim analýzy: –";
-            wasManualAnalysis = null;
         }
     }
 }
