@@ -1,62 +1,86 @@
 ﻿using System.Windows;
-using OscilloscopeCLI.Signal;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using ScottPlot;
+using OscilloscopeCLI.Signal;
 using OscilloscopeCLI.Protocols;
 using OscilloscopeGUI.Plotting;
 using OscilloscopeGUI.Services;
-using System.Windows.Input;
-using System.Runtime.InteropServices;
-using System.Windows.Media;
-using ScottPlot;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
-        private SignalLoader loader = new SignalLoader(); // nacita data ze souboru CSV
-        private SignalPlotter plotter; // zodpovida za vykreslovani signalu
-        private PlotNavigationService navService; // ovladani zoomu a posunu v grafu
-        private SearchService searchService; // vyhledavani v analyzovanych datech
-        private FileLoadingService fileLoadingService = new FileLoadingService(); // nacitani CSV souboru s dialogem a pokrokem
-        private ProtocolAnalysisService protocolAnalysisService = new ProtocolAnalysisService(); // analyza podle vybraneho protokolu
-        private ExportService exportService = new ExportService(); // export vysledku analyzy do CSV
-        private bool isDragging = false; // priznak, zda uzivatel prave posouva graf
-        private Point lastMousePosition; // posledni pozice mysi pri posunu
-        private IProtocolAnalyzer? activeAnalyzer; // aktualne pouzivany analyzer protokolu
-        private SpiChannelMapping? lastUsedSpiMapping = null; // naposledy pouzite mapovani SPI kanalu
+      
+        // === Services ===
+        private readonly SignalLoader loader = new();
+        private readonly FileLoadingService fileLoadingService = new();
+        private readonly ProtocolAnalysisService protocolAnalysisService = new();
+        private readonly ExportService exportService = new();
+        private SignalPlotter plotter = null!;
+        private PlotNavigationService navService = null!;
+        private SearchService searchService = null!;
+
+        // === Stav aplikace ===
+        private IProtocolAnalyzer? activeAnalyzer;
+        private SpiChannelMapping? lastUsedSpiMapping = null;
         private UartChannelMapping? lastUsedUartMapping = null;
-        private string? loadedFilePath = null; // cesta k nactenemu CSV souboru     
+        private string? loadedFilePath = null;
+        private bool isDragging = false;
+        private Point lastMousePosition;
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        static extern bool AllocConsole();
-
-        private List<ScottPlot.Plottables.Text> byteLabels = new();
-        private List<IPlottable> byteStartLines = new();
-
-        private enum ByteDisplayFormat { Hex, Dec, Ascii }
+        // === Nastaveni zobrazeni ===
         private ByteDisplayFormat currentFormat = ByteDisplayFormat.Hex;
         private bool? wasManualAnalysis = null;
+
+        // === Vyfiltrovana data ===
         private List<UartDecodedByte>? filteredUartBytes = null;
         private List<SpiDecodedByte>? filteredSpiBytes = null;
+
+        // === Anotace v grafu ===
+        private readonly List<ScottPlot.Plottables.Text> byteLabels = new();
+        private readonly List<IPlottable> byteStartLines = new();
+
+        // === Casove znacky ===
         private double? timeMark1 = null;
         private double? timeMark2 = null;
         private ScottPlot.Plottables.VerticalLine? line1 = null;
         private ScottPlot.Plottables.VerticalLine? line2 = null;
 
+        // === Enum pro zobrazeni formatu bajtu ===
+        private enum ByteDisplayFormat {
+            Hex,
+            Dec,
+            Ascii
+        }
+
         /// <summary>
         /// Konstruktor hlavniho okna aplikace
         /// </summary>
         public MainWindow() {
-            AllocConsole();
             InitializeComponent();
+            InitializePlot();
+            InitializeEvents();
+        }
 
+        /// <summary>
+        /// Inicializace plotteru, navigace a vyhledavani
+        /// </summary>
+        private void InitializePlot() {
             plot.UserInputProcessor.Disable();
-            this.KeyDown += MainWindow_KeyDown;
-            this.MouseWheel += MainWindow_MouseWheel;
 
             plotter = new SignalPlotter(plot);
             navService = new PlotNavigationService(plot);
             searchService = new SearchService(plot, navService);
             searchService.AttachUi(ResultInfo, ResultNavigationPanel);
+        }
+
+        /// <summary>
+        /// Pripoji udalosti pro klavesnici a mys
+        /// </summary>
+        private void InitializeEvents() {
+            this.KeyDown += MainWindow_KeyDown;
+            this.MouseWheel += MainWindow_MouseWheel;
+            this.KeyUp += (s, e) => UpdateAnnotations();
 
             plot.MouseDown += (s, e) => {
                 if (e.ChangedButton == MouseButton.Middle) {
@@ -75,6 +99,7 @@ namespace OscilloscopeGUI {
             plot.MouseLeftButtonUp += (s, e) => {
                 isDragging = false;
                 plot.ReleaseMouseCapture();
+                UpdateAnnotations();
             };
 
             plot.MouseMove += (s, e) => {
@@ -87,13 +112,13 @@ namespace OscilloscopeGUI {
             };
 
             plot.MouseRightButtonDown += Plot_MouseRightButtonDown;
-
-            plot.MouseWheel += (s, e) => UpdateAnnotations();
-            plot.MouseLeftButtonUp += (s, e) => UpdateAnnotations();
             plot.MouseRightButtonUp += (s, e) => UpdateAnnotations();
-            this.KeyUp += (s, e) => UpdateAnnotations();
+            plot.MouseWheel += (s, e) => UpdateAnnotations();
         }
 
+        /// <summary>
+        /// Aktualizuje anotace v grafu podle aktualne vybraneho analyzatoru
+        /// </summary>
         private void UpdateAnnotations() {
             foreach (var label in byteLabels)
                 plot.Plot.Remove(label);
@@ -106,96 +131,122 @@ namespace OscilloscopeGUI {
             if (activeAnalyzer is null)
                 return;
 
-            var limits = plot.Plot.Axes.GetLimits();
-            double xMin = limits.Left;
-            double xMax = limits.Right;
-
-            ScottPlot.Color startColor = ScottPlot.Colors.Gray;
-            ScottPlot.Color altColor = ScottPlot.Colors.Black;
-
-            string FormatByte(byte b) {
-                return currentFormat switch {
-                    ByteDisplayFormat.Hex => $"0x{b:X2}",
-                    ByteDisplayFormat.Dec => b.ToString(),
-                    ByteDisplayFormat.Ascii => char.IsControl((char)b) ? "." : ((char)b).ToString(),
-                    _ => $"0x{b:X2}"
-                };
-            }
-
-            if (activeAnalyzer is UartProtocolAnalyzer uart) {
-                var bytes = filteredUartBytes ?? uart.DecodedBytes;
-
-                for (int i = 0; i < bytes.Count; i++) {
-                    var b = bytes[i];
-                    double centerX = (b.StartTime + b.EndTime) / 2;
-                    if (centerX < xMin || centerX > xMax)
-                        continue;
-
-                    var color = (i % 2 == 0) ? startColor : altColor;
-
-                    var text = plot.Plot.Add.Text(FormatByte(b.Value), centerX, 1.3);
-                    text.LabelStyle.FontSize = 16;
-                    text.LabelStyle.Bold = true;
-                    text.LabelFontColor = color;
-                    byteLabels.Add(text);
-
-                    var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
-                    lineStart.Color = color;
-                    lineStart.LineWidth = 1;
-                    lineStart.LinePattern = ScottPlot.LinePattern.Dashed;
-                    byteStartLines.Add(lineStart);
-
-                    var lineEnd = plot.Plot.Add.VerticalLine(b.EndTime);
-                    lineEnd.Color = color;
-                    lineEnd.LineWidth = 1;
-                    lineEnd.LinePattern = ScottPlot.LinePattern.Dashed;
-                    byteStartLines.Add(lineEnd);
-                }
-            } else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
-                var bytes = filteredSpiBytes ?? spi.DecodedBytes;
-
-                for (int i = 0; i < bytes.Count; i++) {
-                    var b = bytes[i];
-                    double centerX = (b.StartTime + b.EndTime) / 2;
-                    if (centerX < xMin || centerX > xMax)
-                        continue;
-
-                    var color = (i % 2 == 0) ? startColor : altColor;
-
-                    // MOSI – nahoru
-                    var textMosi = plot.Plot.Add.Text(FormatByte(b.ValueMOSI), centerX, 1.3);
-                    textMosi.LabelStyle.FontSize = 16;
-                    textMosi.LabelStyle.Bold = true;
-                    textMosi.LabelFontColor = color;
-                    byteLabels.Add(textMosi);
-
-                    // MISO – dolu pod graf
-                    if (b.HasMISO) {
-                        var textMiso = plot.Plot.Add.Text(FormatByte(b.ValueMISO), centerX, -1.5);
-                        textMiso.LabelStyle.FontSize = 16;
-                        textMiso.LabelStyle.Bold = true;
-                        textMiso.LabelFontColor = color;
-                        byteLabels.Add(textMiso);
-                    }
-
-                    var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
-                    lineStart.Color = color;
-                    lineStart.LineWidth = 1;
-                    lineStart.LinePattern = ScottPlot.LinePattern.Dashed;
-                    byteStartLines.Add(lineStart);
-
-                    var lineEnd = plot.Plot.Add.VerticalLine(b.EndTime);
-                    lineEnd.Color = color;
-                    lineEnd.LineWidth = 1;
-                    lineEnd.LinePattern = ScottPlot.LinePattern.Dashed;
-                    byteStartLines.Add(lineEnd);
-                }
-            }
+            if (activeAnalyzer is UartProtocolAnalyzer)
+                RenderUartAnnotations();
+            else if (activeAnalyzer is SpiProtocolAnalyzer)
+                RenderSpiAnnotations();
 
             plot.Refresh();
         }
 
+        /// <summary>
+        /// Vykresli anotace bajtu a prislusne vertikalni cary pro UART analyzator
+        /// </summary>
+        private void RenderUartAnnotations() {
+            if (activeAnalyzer is not UartProtocolAnalyzer uart)
+                return;
 
+            var limits = plot.Plot.Axes.GetLimits();
+            double xMin = limits.Left;
+            double xMax = limits.Right;
+
+            var bytes = filteredUartBytes ?? uart.DecodedBytes;
+            for (int i = 0; i < bytes.Count; i++) {
+                var b = bytes[i];
+                double centerX = (b.StartTime + b.EndTime) / 2;
+                if (centerX < xMin || centerX > xMax)
+                    continue;
+
+                var color = (i % 2 == 0) ? ScottPlot.Colors.Gray : ScottPlot.Colors.Black;
+
+                var text = plot.Plot.Add.Text(FormatByte(b.Value), centerX, 1.3);
+                text.LabelStyle.FontSize = 16;
+                text.LabelStyle.Bold = true;
+                text.LabelFontColor = color;
+                byteLabels.Add(text);
+
+                var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
+                lineStart.Color = color;
+                lineStart.LineWidth = 1;
+                lineStart.LinePattern = ScottPlot.LinePattern.Dashed;
+                byteStartLines.Add(lineStart);
+
+                var lineEnd = plot.Plot.Add.VerticalLine(b.EndTime);
+                lineEnd.Color = color;
+                lineEnd.LineWidth = 1;
+                lineEnd.LinePattern = ScottPlot.LinePattern.Dashed;
+                byteStartLines.Add(lineEnd);
+            }
+        }
+
+        /// <summary>
+        /// Vykresli anotace bajtu (MOSI a MISO) a prislusne cary pro SPI analyzator
+        /// </summary>
+        private void RenderSpiAnnotations() {
+            if (activeAnalyzer is not SpiProtocolAnalyzer spi)
+                return;
+
+            var limits = plot.Plot.Axes.GetLimits();
+            double xMin = limits.Left;
+            double xMax = limits.Right;
+
+            var bytes = filteredSpiBytes ?? spi.DecodedBytes;
+            for (int i = 0; i < bytes.Count; i++) {
+                var b = bytes[i];
+                double centerX = (b.StartTime + b.EndTime) / 2;
+                if (centerX < xMin || centerX > xMax)
+                    continue;
+
+                var color = (i % 2 == 0) ? ScottPlot.Colors.Gray : ScottPlot.Colors.Black;
+
+                var textMosi = plot.Plot.Add.Text(FormatByte(b.ValueMOSI), centerX, 1.3);
+                textMosi.LabelStyle.FontSize = 16;
+                textMosi.LabelStyle.Bold = true;
+                textMosi.LabelFontColor = color;
+                byteLabels.Add(textMosi);
+
+                if (b.HasMISO) {
+                    var textMiso = plot.Plot.Add.Text(FormatByte(b.ValueMISO), centerX, -1.5);
+                    textMiso.LabelStyle.FontSize = 16;
+                    textMiso.LabelStyle.Bold = true;
+                    textMiso.LabelFontColor = color;
+                    byteLabels.Add(textMiso);
+                }
+
+                var lineStart = plot.Plot.Add.VerticalLine(b.StartTime);
+                lineStart.Color = color;
+                lineStart.LineWidth = 1;
+                lineStart.LinePattern = ScottPlot.LinePattern.Dashed;
+                byteStartLines.Add(lineStart);
+
+                var lineEnd = plot.Plot.Add.VerticalLine(b.EndTime);
+                lineEnd.Color = color;
+                lineEnd.LineWidth = 1;
+                lineEnd.LinePattern = ScottPlot.LinePattern.Dashed;
+                byteStartLines.Add(lineEnd);
+            }
+        }
+
+
+        /// <summary>
+        /// Formatuje bajt podle aktualne zvoleneho rezimu zobrazeni (HEX/DEC/ASCII)
+        /// </summary>
+        /// <param name="b">Vstupni bajt</param>
+        /// <returns>Naformatovany retezec pro zobrazeni</returns>
+        private string FormatByte(byte b) {
+            return currentFormat switch {
+                ByteDisplayFormat.Hex => $"0x{b:X2}",
+                ByteDisplayFormat.Dec => b.ToString(),
+                ByteDisplayFormat.Ascii => char.IsControl((char)b) ? "." : ((char)b).ToString(),
+                _ => $"0x{b:X2}"
+            };
+        }
+  
+        /// <summary>
+        /// Reaguje na zmenu formatu bajtu (HEX/DEC/ASCII) a aktualizuje anotace v grafu
+        /// </summary>
+        /// <param name="sender">Odesilatel udalosti (radio button)</param>
+        /// <param name="e">Argument udalosti</param>
         private void FormatChanged(object sender, RoutedEventArgs e) {
             if (sender is RadioButton rb && rb.IsChecked == true) {
                 switch (rb.Content.ToString()) {
@@ -213,44 +264,10 @@ namespace OscilloscopeGUI {
             }
         }
 
-        private void FilterRadio_Checked(object sender, RoutedEventArgs e) {
-            if (FilterAllRadio == null || FilterNoErrorRadio == null || FilterErrorRadio == null)
-                return;
-
-            string filter = "all";
-
-            if (FilterNoErrorRadio.IsChecked == true)
-                filter = "noerror";
-            else if (FilterErrorRadio.IsChecked == true)
-                filter = "error";
-
-            ApplyFilter(filter);
-        }
-
-        private void ApplyFilter(string filter) {
-            if (activeAnalyzer is UartProtocolAnalyzer uart) {
-                filteredUartBytes = filter switch
-                {
-                    "error" => uart.DecodedBytes.Where(b => !string.IsNullOrEmpty(b.Error)).ToList(),
-                    "noerror" => uart.DecodedBytes.Where(b => string.IsNullOrEmpty(b.Error)).ToList(),
-                    _ => uart.DecodedBytes.ToList()
-                };
-            }
-            else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
-                filteredSpiBytes = filter switch
-                {
-                    "error" => spi.DecodedBytes.Where(b => !string.IsNullOrEmpty(b.Error)).ToList(),
-                    "noerror" => spi.DecodedBytes.Where(b => string.IsNullOrEmpty(b.Error)).ToList(),
-                    _ => spi.DecodedBytes.ToList()
-                };
-            }
-
-            searchService.RefreshSearch();
-            UpdateAnnotations();
-        }
+        // === Vstupni udalosti (klavesnice, mys, vyhledavani) ===
 
         /// <summary>
-        /// Zpracuje stisk klavesnice pro navigaci a vyhledavani
+        /// Reaguje na stisk klavesy – navigace vysledku a posun grafu
         /// </summary>
         private void MainWindow_KeyDown(object sender, KeyEventArgs e) {
             if (e.Key == Key.Left) {
@@ -272,14 +289,14 @@ namespace OscilloscopeGUI {
         }
 
         /// <summary>
-        /// Zpracuje pohyb kolecka mysi pro zoom grafu
+        /// Reaguje na kolecko mysi – zoomovani v grafu
         /// </summary>
         private void MainWindow_MouseWheel(object sender, MouseWheelEventArgs e) {
             navService.HandleMouseWheel(e);
         }
 
         /// <summary>
-        /// Zpracuje stisk klavesy Enter ve vyhledavacim poli
+        /// Reaguje na stisk Enter ve vyhledavacim poli
         /// </summary>
         private void SearchBox_KeyDown(object sender, KeyEventArgs e) {
             if (e.Key == Key.Enter) {
@@ -289,11 +306,37 @@ namespace OscilloscopeGUI {
         }
 
         /// <summary>
+        /// Vymaze napovedu ve vyhledavacim poli pri ziskani fokusu
+        /// </summary>
+        private void SearchBox_GotFocus(object sender, RoutedEventArgs e) {
+            if (SearchBox.Text == "(0xFF/65/A)") {
+                SearchBox.Text = "";
+                SearchBox.Foreground = new SolidColorBrush(System.Windows.Media.Colors.Black);
+            }
+        }
+
+        /// <summary>
+        /// Obnovi napovedu ve vyhledavacim poli pri ztrate fokusu
+        /// </summary>
+        private void SearchBox_LostFocus(object sender, RoutedEventArgs e) {
+            if (string.IsNullOrWhiteSpace(SearchBox.Text)) {
+                SearchBox.Text = "(0xFF/65/A)";
+                SearchBox.Foreground = new SolidColorBrush(System.Windows.Media.Colors.Gray);
+            }
+        }
+
+        /// <summary>
+        /// Provede export vysledku analyzy do CSV souboru
+        /// </summary>
+        private void ExportResultsButton_Click(object sender, RoutedEventArgs e) {
+            exportService.Export(activeAnalyzer, loadedFilePath);
+        }
+
+        /// <summary>
         /// Nacte CSV soubor, vykresli signal a provede mapovani kanalu podle zvoleneho protokolu
         /// </summary>
         private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
             
-
             // 1. Vyber CSV souboru
             var filePick = fileLoadingService.PromptForFileOnly(this);
             if (!filePick.Success)
@@ -420,6 +463,53 @@ namespace OscilloscopeGUI {
             progressDialog.OnOkClicked = () => progressDialog.Close();
         }
 
+        /// <summary>
+        /// Overi, zda se zvolený protokol hodi na aktualni pocet kanalu:
+        ///   - 1 kanal  → pouze UART
+        ///   - 2 kanaly → UART i SPI
+        ///   - 3+kanaly → pouze SPI
+        /// </summary>
+        private bool CheckChannelCount(string protocol, int channelCount) {
+            // 1 kanal: jen UART
+            if (channelCount == 1 && protocol != "UART") {
+                MessageBox.Show(
+                    "S jedním kanálem lze dekódovat pouze UART.",
+                    "Neplatná konfigurace",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
+
+            // 3 nebo vice kanalu: jen SPI
+            if (channelCount >= 3 && protocol != "SPI") {
+                MessageBox.Show(
+                    "Při třech a více kanálech lze dekódovat pouze SPI.",
+                    "Neplatná konfigurace",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
+
+            // 2 kanzly: UART i SPI OK, ale zkontrolujeme minimalni poyadavek
+            int requiredMin = protocol switch {
+                "UART" => 1,
+                "SPI"  => 2,
+                _      => 0
+            };
+            if (channelCount < requiredMin) {
+                var suffix = requiredMin > 1 ? "ů" : "";
+                MessageBox.Show(
+                    $"Pro analýzu {protocol} je potřeba alespoň {requiredMin} kanál{suffix}.",
+                    "Nedostatečný počet kanálů",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
+
+            return true;
+        }
+
+        // === Vyhledavani a filtry ===
 
         /// <summary>
         /// Spusti analyzu signalu podle zvoleneho protokolu
@@ -451,56 +541,74 @@ namespace OscilloscopeGUI {
         }
 
         /// <summary>
-        /// Overi, zda se zvolený protokol hodi na aktualni pocet kanalu:
-        ///   - 1 kanal  → pouze UART
-        ///   - 2 kanaly → UART i SPI
-        ///   - 3+kanaly → pouze SPI
+        /// Aplikuje filtr na dekodovana data podle chyby (UART nebo SPI). Obnovi hledani a anotace
         /// </summary>
-        private bool CheckChannelCount(string protocol, int channelCount) {
-            // 1 kanal: jen UART
-            if (channelCount == 1 && protocol != "UART") {
-                MessageBox.Show(
-                    "S jedním kanálem lze dekódovat pouze UART.",
-                    "Neplatná konfigurace",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return false;
+        private void ApplyFilter(string filter) {
+            if (activeAnalyzer is UartProtocolAnalyzer uart) {
+                filteredUartBytes = filter switch
+                {
+                    "error" => uart.DecodedBytes.Where(b => !string.IsNullOrEmpty(b.Error)).ToList(),
+                    "noerror" => uart.DecodedBytes.Where(b => string.IsNullOrEmpty(b.Error)).ToList(),
+                    _ => uart.DecodedBytes.ToList()
+                };
+            }
+            else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
+                filteredSpiBytes = filter switch
+                {
+                    "error" => spi.DecodedBytes.Where(b => !string.IsNullOrEmpty(b.Error)).ToList(),
+                    "noerror" => spi.DecodedBytes.Where(b => string.IsNullOrEmpty(b.Error)).ToList(),
+                    _ => spi.DecodedBytes.ToList()
+                };
             }
 
-            // 3 nebo více kanálů: jen SPI
-            if (channelCount >= 3 && protocol != "SPI") {
-                MessageBox.Show(
-                    "Při třech a více kanálech lze dekódovat pouze SPI.",
-                    "Neplatná konfigurace",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return false;
-            }
-
-            // 2 kanály: UART i SPI OK, ale zkontrolujeme minimální požadavek
-            int requiredMin = protocol switch {
-                "UART" => 1,
-                "SPI"  => 2,
-                _      => 0
-            };
-            if (channelCount < requiredMin) {
-                var suffix = requiredMin > 1 ? "ů" : "";
-                MessageBox.Show(
-                    $"Pro analýzu {protocol} je potřeba alespoň {requiredMin} kanál{suffix}.",
-                    "Nedostatečný počet kanálů",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return false;
-            }
-
-            return true;
+            searchService.RefreshSearch();
+            UpdateAnnotations();
         }
 
         /// <summary>
-        /// Zpracuje kliknuti pravym tlacitkem a zmeri casovy rozdil mezi dvema body
+        /// Reaguje na zaskrtnuti radio buttonu filtru. Nastavi typ filtru a aplikuje ho
+        /// </summary>
+        private void FilterRadio_Checked(object sender, RoutedEventArgs e) {
+            if (FilterAllRadio == null || FilterNoErrorRadio == null || FilterErrorRadio == null)
+                return;
+
+            string filter = "all";
+
+            if (FilterNoErrorRadio.IsChecked == true)
+                filter = "noerror";
+            else if (FilterErrorRadio.IsChecked == true)
+                filter = "error";
+
+            ApplyFilter(filter);
+        }
+
+        /// <summary>
+        /// Spusti vyhledavani v dekodovanych datech
+        /// </summary>
+        private void SearchButton_Click(object sender, RoutedEventArgs e) {
+            searchService.Search(SearchBox.Text.Trim());
+        }
+
+        /// <summary>
+        /// Preskoci na dalsi nalezeny vysledek
+        /// </summary>
+        private void NextResult_Click(object sender, RoutedEventArgs e) {
+            searchService.NextMatch();
+        }
+
+        /// <summary>
+        /// Preskoci na predchozi nalezeny vysledek
+        /// </summary>
+        private void PrevResult_Click(object sender, RoutedEventArgs e) {
+            searchService.PreviousMatch();
+        }
+
+        // === Casove znacky ===
+
+        /// <summary>
+        /// Reaguje na prave kliknuti do grafu – nastavi casove znacky pro mereni
         /// </summary>
         private void Plot_MouseRightButtonDown(object sender, MouseButtonEventArgs e) {
-            // Ziskani DPI obrazovky
             var source = PresentationSource.FromVisual(this);
             double dpiX = 1.0, dpiY = 1.0;
             if (source != null) {
@@ -508,12 +616,10 @@ namespace OscilloscopeGUI {
                 dpiY = source.CompositionTarget.TransformToDevice.M22;
             }
 
-            // Ziskani pozice mysi a uprava podle DPI
             Point mousePos = e.GetPosition(plot);
             double adjustedX = mousePos.X * dpiX;
             double adjustedY = mousePos.Y * dpiY;
 
-            // Vytvoreni pixelu a prevod na souradnice grafu
             var pixel = new ScottPlot.Pixel(adjustedX, adjustedY);
             var coord = plot.Plot.GetCoordinates(pixel);
             double t = coord.X;
@@ -579,10 +685,30 @@ namespace OscilloscopeGUI {
         }
 
         /// <summary>
-        /// Provede export vysledku analyzy do CSV souboru
+        /// Nastavi aktualni analyzator a zaregistruje ho pro vyhledavani
         /// </summary>
-        private void ExportResultsButton_Click(object sender, RoutedEventArgs e) {
-            exportService.Export(activeAnalyzer, loadedFilePath);
+        private void SetAnalyzer(IProtocolAnalyzer analyzer) {
+            activeAnalyzer = analyzer;
+
+            // Reset filtrovanych dat
+            filteredUartBytes = null;
+            filteredSpiBytes = null;
+
+            if (analyzer is ISearchableAnalyzer searchable) {
+                searchService.SetAnalyzer(searchable);
+                searchService.SetUpdateCallback(UpdateAnnotations);
+
+                searchService.SetFilterCallback(() => {
+                    if (FilterErrorRadio?.IsChecked == true)
+                        return ByteFilterMode.OnlyErrors;
+                    else if (FilterNoErrorRadio?.IsChecked == true)
+                        return ByteFilterMode.NoErrors;
+                    else
+                        return ByteFilterMode.All;
+                });
+            } else {
+                searchService.Reset();
+            }
         }
 
         /// <summary>
@@ -610,59 +736,17 @@ namespace OscilloscopeGUI {
             plot.Refresh();
         }
 
-        /// <summary>
-        /// Spusti vyhledavani v dekodovanych datech
-        /// </summary>
-        private void SearchButton_Click(object sender, RoutedEventArgs e) {
-            searchService.Search(SearchBox.Text.Trim());
-        }
+        // === Statistiky ===
 
         /// <summary>
-        /// Preskoci na dalsi nalezeny vysledek
+        /// Aktualizuje statistiky podle aktualniho analyzatoru
         /// </summary>
-        private void NextResult_Click(object sender, RoutedEventArgs e) {
-            searchService.NextMatch();
-        }
-
         private void UpdateStatistics() {
-            int total = 0;
-            int errors = 0;
-            double avgDurationUs = 0;
-            double minUs = 0;
-            double maxUs = 0;
-
             if (activeAnalyzer is UartProtocolAnalyzer uart) {
-                var bytes = filteredUartBytes ?? uart.DecodedBytes;
-                total = bytes.Count;
-                errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
-                avgDurationUs = bytes.Count > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-                minUs = bytes.Count > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-                maxUs = bytes.Count > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-
-                double bitsPerByte = uart.Settings.DataBits + 1 + (uart.Settings.Parity == Parity.None ? 0 : 1) + uart.Settings.StopBits;
-                double avgBaud = avgDurationUs > 0 ? (bitsPerByte * 1_000_000.0 / avgDurationUs) : 0;
-
-                StatsBaudRate.Text = $"Odhadovaná přenosová rychlost: {avgBaud:F0} baud";
-                StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
-                StatsSpiTransfers.Text = "Počet přenosů (SPI): –";
-                StatsMosiMiso.Text = "Počet bajtů MOSI/MISO: –";
+                UpdateUartStats(uart);
             }
             else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
-                var bytes = filteredSpiBytes ?? spi.DecodedBytes;
-                total = bytes.Count;
-                errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
-                avgDurationUs = bytes.Count > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-                minUs = bytes.Count > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-                maxUs = bytes.Count > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-
-                int transferCount = spi.TransferCount;
-                double avgTransferLength = spi.AvgTransferDurationUs;
-                int misoBytes = bytes.Count(b => b.HasMISO);
-
-                StatsBaudRate.Text = $"Prům. délka SPI přenosu: {avgTransferLength:F1} µs";
-                StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
-                StatsSpiTransfers.Text = $"Počet přenosů (CS aktivní): {transferCount}";
-                StatsMosiMiso.Text = $"Bajty MOSI / MISO: {total - misoBytes} / {misoBytes}";
+                UpdateSpiStats(spi);
             }
 
             if (wasManualAnalysis.HasValue) {
@@ -670,66 +754,58 @@ namespace OscilloscopeGUI {
             } else {
                 StatsAnalysisMode.Text = "Režim analýzy: –";
             }
+        }
 
+        /// <summary>
+        /// Vypocita a zobrazi statistiky pro UART analyzator
+        /// </summary>
+        private void UpdateUartStats(UartProtocolAnalyzer uart) {
+            var bytes = filteredUartBytes ?? uart.DecodedBytes;
+            int total = bytes.Count;
+            int errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
+            double avgDurationUs = total > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+            double minUs = total > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+            double maxUs = total > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+
+            double bitsPerByte = uart.Settings.DataBits + 1 + (uart.Settings.Parity == Parity.None ? 0 : 1) + uart.Settings.StopBits;
+            double avgBaud = avgDurationUs > 0 ? (bitsPerByte * 1_000_000.0 / avgDurationUs) : 0;
+
+            StatsBaudRate.Text = $"Odhadovaná přenosová rychlost: {avgBaud:F0} baud";
+            StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
+            StatsSpiTransfers.Text = "Počet přenosů (SPI): –";
+            StatsMosiMiso.Text = "Počet bajtů MOSI/MISO: –";
             StatsTotalBytes.Text = $"Celkový počet bajtů: {total}";
             StatsErrors.Text = $"Počet bajtů s chybou: {errors}";
             StatsAvgDuration.Text = $"Průměrná délka bajtu: {avgDurationUs:F1} µs";
         }
 
         /// <summary>
-        /// Preskoci na predchozi nalezeny vysledek
+        /// Vypocita a zobrazi statistiky pro SPI analyzator
         /// </summary>
-        private void PrevResult_Click(object sender, RoutedEventArgs e) {
-            searchService.PreviousMatch();
+        private void UpdateSpiStats(SpiProtocolAnalyzer spi) {
+            var bytes = filteredSpiBytes ?? spi.DecodedBytes;
+            int total = bytes.Count;
+            int errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
+            double avgDurationUs = total > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+            double minUs = total > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+            double maxUs = total > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+
+            int transferCount = spi.TransferCount;
+            double avgTransferLength = spi.AvgTransferDurationUs;
+            int misoBytes = bytes.Count(b => b.HasMISO);
+
+            StatsBaudRate.Text = $"Prům. délka SPI přenosu: {avgTransferLength:F1} µs";
+            StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
+            StatsSpiTransfers.Text = $"Počet přenosů (CS aktivní): {transferCount}";
+            StatsMosiMiso.Text = $"Bajty MOSI / MISO: {total - misoBytes} / {misoBytes}";
+            StatsTotalBytes.Text = $"Celkový počet bajtů: {total}";
+            StatsErrors.Text = $"Počet bajtů s chybou: {errors}";
+            StatsAvgDuration.Text = $"Průměrná délka bajtu: {avgDurationUs:F1} µs";
         }
 
         /// <summary>
-        /// Vymaze napovedni text ve vyhledavacim poli pri ziskani fokusu
+        /// Vynuluje vsechny statistiky v GUI
         /// </summary>
-        private void SearchBox_GotFocus(object sender, RoutedEventArgs e) {
-            if (SearchBox.Text == "(0xFF/65/A)") {
-                SearchBox.Text = "";
-                SearchBox.Foreground = new SolidColorBrush(System.Windows.Media.Colors.Black);
-            }
-        }
-
-        /// <summary>
-        /// Obnovi napovedni text ve vyhledavacim poli pri ztrate fokusu
-        /// </summary>
-        private void SearchBox_LostFocus(object sender, RoutedEventArgs e) {
-            if (string.IsNullOrWhiteSpace(SearchBox.Text)) {
-                SearchBox.Text = "(0xFF/65/A)";
-                SearchBox.Foreground = new SolidColorBrush(System.Windows.Media.Colors.Gray);
-            }
-        }
-
-        /// <summary>
-        /// Nastavi aktualni analyzator a zaregistruje ho pro vyhledavani
-        /// </summary>
-        private void SetAnalyzer(IProtocolAnalyzer analyzer) {
-            activeAnalyzer = analyzer;
-
-            // Reset filtrovanych dat
-            filteredUartBytes = null;
-            filteredSpiBytes = null;
-
-            if (analyzer is ISearchableAnalyzer searchable) {
-                searchService.SetAnalyzer(searchable);
-                searchService.SetUpdateCallback(UpdateAnnotations);
-
-                searchService.SetFilterCallback(() => {
-                    if (FilterErrorRadio?.IsChecked == true)
-                        return ByteFilterMode.OnlyErrors;
-                    else if (FilterNoErrorRadio?.IsChecked == true)
-                        return ByteFilterMode.NoErrors;
-                    else
-                        return ByteFilterMode.All;
-                });
-            } else {
-                searchService.Reset();
-            }
-        }
-
         private void ResetStatistics() {
             StatsTotalBytes.Text = "Celkový počet bajtů: –";
             StatsErrors.Text = "Počet bajtů s chybou: –";
@@ -738,9 +814,8 @@ namespace OscilloscopeGUI {
             StatsMinMaxDuration.Text = "Délka bajtu (min/max): –";
             StatsSpiTransfers.Text = "Počet SPI přenosů (CS aktivní): –";
             StatsMosiMiso.Text = "Bajty MOSI / MISO: –";
-            StatsAnalysisMode.Text = "Režim analýzy: –"; 
+            StatsAnalysisMode.Text = "Režim analýzy: –";
             wasManualAnalysis = null;
         }
-
     }
 }
