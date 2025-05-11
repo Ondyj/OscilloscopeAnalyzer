@@ -239,11 +239,12 @@ namespace OscilloscopeGUI {
         /// Nacte CSV soubor, vykresli signal a provede mapovani kanalu podle zvoleneho protokolu
         /// </summary>
         private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
-            ResetState();
 
             var result = await fileLoadingService.LoadAndMapAsync(loader, this);
             if (!result.Success)
                 return;
+
+            ResetState();
 
             loadedFilePath = result.FilePath;
             lastUsedUartMapping = result.UartMapping;
