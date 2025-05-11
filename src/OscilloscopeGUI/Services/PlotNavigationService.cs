@@ -11,13 +11,15 @@ namespace OscilloscopeGUI.Services {
         private AxisLimits? baseLimits = null;
         private bool isZoomedIn = false;
         private double? baseXRange = null;
-        private double maxZoomOutFactor = 10;
-    
+
+        // Fixni maximalni faktor pro oddaleni
+        private double maxZoomOutFactor = 1;
+
         public PlotNavigationService(WpfPlot plotControl) {
             plot = plotControl;
         }
 
-        // <summary>
+        /// <summary>
         /// Zpracuje klavesovou udalost pro zoomovani a posun.
         /// W nebo Sipka nahoru = priblizeni, S nebo Sipka dolu = oddaleni, A = posun doleva, D = posun doprava.
         /// </summary>
@@ -39,8 +41,8 @@ namespace OscilloscopeGUI.Services {
                 xAxis.Min += shiftX;
                 xAxis.Max -= shiftX;
             } else if (key == Key.S || key == Key.Down) {
+                // Oddaleni (ale ne pres limit)
                 double newRange = rangeX + 2 * shiftX;
-
                 double baseRange = baseXRange ?? rangeX;
                 double maxAllowedRange = baseRange * maxZoomOutFactor;
 
@@ -48,7 +50,6 @@ namespace OscilloscopeGUI.Services {
                     xAxis.Min -= shiftX;
                     xAxis.Max += shiftX;
                 }
-                // jinak neprovadet dalsi oddaleni
             } else if (key == Key.A) {
                 // Posun doleva
                 xAxis.Min -= panX;
@@ -84,15 +85,16 @@ namespace OscilloscopeGUI.Services {
             plot.Plot.Axes.AutoScale();
             var limits = plot.Plot.Axes.GetLimits();
 
-            double originalRange = limits.XRange.Max - limits.XRange.Min;
-            double zoomFactor = 300;
-            double zoomedRange = originalRange / zoomFactor;
+            double baseRange = limits.XRange.Max - limits.XRange.Min;
+
+            // Oprava: pouzij nasobeni, ne deleni
+            double zoomedRange = baseRange * maxZoomOutFactor;
+
+            baseLimits = limits;
+            baseXRange = baseRange;
 
             double newXMin = signalStartTime - zoomedRange / 2;
             double newXMax = signalStartTime + zoomedRange / 2;
-
-            baseLimits = plot.Plot.Axes.GetLimits();
-            baseXRange = baseLimits?.XRange.Max - baseLimits?.XRange.Min;
 
             plot.Plot.Axes.SetLimitsX(newXMin, newXMax);
             plot.Refresh();
@@ -102,60 +104,36 @@ namespace OscilloscopeGUI.Services {
         }
 
         /// <summary>
-        /// Posune graf horizontálně podle rozdilu souradnic X v pixelech
+        /// Posune graf horizontalne podle rozdilu souradnic X v pixelech
         /// </summary>
         public void PanByPixelDelta(double deltaX) {
             var xAxis = plot.Plot.Axes.Bottom;
 
             double rangeX = xAxis.Max - xAxis.Min;
-
-            // Ziskame aktualni sirku oblasti grafu v pixelech
             double widthPx = plot.ActualWidth;
 
             if (widthPx <= 0) return;
 
             double deltaUnits = (deltaX / widthPx) * rangeX;
-
             xAxis.Min -= deltaUnits;
             xAxis.Max -= deltaUnits;
 
             plot.Refresh();
         }
+
         /// <summary>
-        /// Priblizi graf na dane X souradnici a nastavi ji do stredu obrazovky.
-        /// Respektuje maximalni priblizeni podle maxZoomOutFactor.
+        /// Priblizi graf na dane X souradnici a nastavi ji do stredu obrazovky
         /// </summary>
         public void CenterOn(double xValue) {
             var plt = plot.Plot;
-
-            // Pouzij ulozene limity nebo aktualni
             var limits = baseLimits ?? plt.Axes.GetLimits();
 
-            double originalXMin = limits.XRange.Min;
-            double originalXMax = limits.XRange.Max;
-            double originalRange = originalXMax - originalXMin;
-
+            double originalRange = limits.XRange.Max - limits.XRange.Min;
             if (isZoomedIn)
                 return;
 
-            // Minimalni rozsah = base rozsah / maxZoomOutFactor
             double baseRange = baseXRange ?? originalRange;
-            double minRange = baseRange / (maxZoomOutFactor > 0 ? maxZoomOutFactor : 1);
-
-            // Vypocet rozsahu s dynamickym zoomem (ale zaroven omezenim)
-            double zoomFactor;
-            if (originalRange < 10)
-                zoomFactor = 1000;
-            else if (originalRange < 21)
-                zoomFactor = 10000;
-            else
-                zoomFactor = 1000000;
-
-            double range = originalRange / zoomFactor;
-
-            // Ujistime se, ze rozsah nebude mensi nez minRange
-            if (range < minRange)
-                range = minRange;
+            double range = baseRange / maxZoomOutFactor;
 
             double newXMin = xValue - range / 2;
             double newXMax = xValue + range / 2;
@@ -166,16 +144,8 @@ namespace OscilloscopeGUI.Services {
             isZoomedIn = true;
         }
 
-        public void SetZoomOutLimitBasedOnDuration(double durationSeconds) {
-            // Dynamicke urceni faktoru podle delky signalu
-            if (durationSeconds < 10)
-                maxZoomOutFactor = 20;
-            else
-                maxZoomOutFactor = 0.0001;
-        }
-
         /// <summary>
-        /// Plynule posune graf tak, aby xValue bylo ve stredu grafu (beze zmeny zoomu)
+        /// Posune graf tak, aby xValue bylo ve stredu bez zmeny zoomu
         /// </summary>
         public void MoveTo(double xCenter) {
             var xAxis = plot.Plot.Axes.Bottom;
@@ -189,5 +159,14 @@ namespace OscilloscopeGUI.Services {
             plot.Refresh();
         }
 
+        public void SetZoomLimitByFileSize(long fileSizeBytes) {
+            if (fileSizeBytes > 20_000_000) {
+                maxZoomOutFactor = 0.0001;
+            } else if (fileSizeBytes > 1_000_000) {
+                maxZoomOutFactor = 0.03;
+            } else {
+                maxZoomOutFactor = 1.0;
+            }
+        }
     }
 }

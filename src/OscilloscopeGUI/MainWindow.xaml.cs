@@ -7,6 +7,7 @@ using OscilloscopeCLI.Signal;
 using OscilloscopeCLI.Protocols;
 using OscilloscopeGUI.Plotting;
 using OscilloscopeGUI.Services;
+using System.IO;
 
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
@@ -250,6 +251,11 @@ namespace OscilloscopeGUI {
             lastUsedUartMapping = result.UartMapping;
             lastUsedSpiMapping = result.SpiMapping;
 
+            if (!string.IsNullOrEmpty(loadedFilePath)) {
+                var fileInfo = new FileInfo(loadedFilePath);
+                navService.SetZoomLimitByFileSize(fileInfo.Length);
+            }
+
             // připrav data pro vykreslení
             var finalData = result.RenameMap.Count > 0
                 ? loader.SignalData.ToDictionary(
@@ -269,9 +275,6 @@ namespace OscilloscopeGUI {
             var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
             await plotter.PlotSignalsAsync(finalData, progress);
 
-            double minTime = finalData.Values.SelectMany(list => list.Select(p => p.Time)).Min();
-            double maxTime = finalData.Values.SelectMany(list => list.Select(p => p.Time)).Max();
-            navService.SetZoomOutLimitBasedOnDuration(maxTime - minTime);
             navService.ResetView(plotter.EarliestTime);
 
             progressDialog.Finish("Vykreslování dokončeno.", autoClose: true);
