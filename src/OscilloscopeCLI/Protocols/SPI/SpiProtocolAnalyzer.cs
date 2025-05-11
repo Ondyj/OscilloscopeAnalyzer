@@ -117,10 +117,25 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     /// Analyzuje jednotlive SPI prenosy v ramci jednoho CS aktivniho segmentu.
     /// </summary>
     private void AnalyzeTransfer(List<DigitalTransition> edges, SignalReader mosiReader, SignalReader? misoReader, double startTime, double endTime) {
+        // 1 Zadne hrany – prenos je zcela neaktivni
+        if (edges.Count == 0) {
+            DecodedBytes.Add(new SpiDecodedByte {
+                Timestamp = startTime,
+                StartTime = startTime,
+                EndTime = endTime,
+                ValueMOSI = 0,
+                ValueMISO = 0,
+                Error = "žádné přechody – neaktivní hodiny",
+                HasMISO = hasMiso
+            });
+            return;
+        }
+
+        // 2 Normalni dekodovani bajtu
         var bitsMosi = new List<bool>();
         var bitsMiso = new List<bool>();
-
         double? currentByteStart = null;
+        int completeBytes = 0;
 
         foreach (var edge in edges) {
             if (currentByteStart == null)
@@ -143,9 +158,11 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
                 bitsMosi.Clear();
                 bitsMiso.Clear();
                 currentByteStart = null;
+                completeBytes++;
             }
         }
 
+        // 3 Neuplny bajt na konci prenosu
         if (bitsMosi.Count > 0) {
             DecodedBytes.Add(new SpiDecodedByte {
                 Timestamp = endTime,
@@ -153,21 +170,25 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
                 EndTime = endTime,
                 ValueMOSI = PackBits(bitsMosi),
                 ValueMISO = hasMiso ? PackBits(bitsMiso) : (byte)0x00,
-                Error = "nekompletní bajt (méně bitů než očekáváno)"
+                Error = "nekompletní bajt (méně bitů než očekáváno)",
+                HasMISO = hasMiso
             });
         }
 
-        if (edges.Count != settings.BitsPerWord && bitsMosi.Count == 0) {
+        // 4 Hrany byly pritomne, ale zadny bajt se nedekodoval 
+        if (completeBytes == 0 && edges.Count > 0 && bitsMosi.Count == 0) {
             DecodedBytes.Add(new SpiDecodedByte {
                 Timestamp = endTime,
                 StartTime = startTime,
                 EndTime = endTime,
                 ValueMOSI = 0,
                 ValueMISO = 0,
-                Error = $"nesoulad počtu hran ({edges.Count}) a očekávaných bitů ({settings.BitsPerWord})"
+                Error = $"nesoulad počtu hran ({edges.Count}) a očekávaných bitů ({settings.BitsPerWord})",
+                HasMISO = hasMiso
             });
         }
     }
+
 
     /// <summary>
     /// Prevede seznam bitu (LSB first) na bajt.
