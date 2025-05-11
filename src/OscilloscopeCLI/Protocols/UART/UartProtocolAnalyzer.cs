@@ -15,6 +15,7 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     private UartMatchSearcher matchSearcher; // Vyhledavani shod v dekodovanych datech
     private UartExporter exporter; // Export dekodovanych dat do souboru
     public UartSettings Settings => settings;
+    
 
     /// <summary>
     /// Vytvori novou instanci analyzatoru UART protokolu.
@@ -91,6 +92,12 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
         byte value = 0;
         string? error = null;
 
+        // Overeni start bitu
+        bool expectedStartBit = !idleLevel;
+        bool actualStartBit = GetBitAtTime(samples, startTime + 0.5 * bitTime);
+        if (actualStartBit != expectedStartBit)
+            error = "chybný start bit";
+
         for (int bitIndex = 0; bitIndex < settings.DataBits; bitIndex++) {
             double sampleTime = startTime + ((bitIndex + 1.5) * bitTime);
             if (GetBitAtTime(samples, sampleTime))
@@ -99,7 +106,7 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
 
         if (settings.Parity != Parity.None) {
             if (!CheckParity(samples, startTime, value, bitTime))
-                error = "chyba parity";
+                error = (error != null ? error + " + " : "") + "chyba parity";
         }
 
         if (!CheckStopBit(samples, startTime, bitTime, idleLevel))
