@@ -1,40 +1,50 @@
 using OscilloscopeCLI.Signal;
 
 namespace OscilloscopeCLI.Protocols {
-    /// <summary>
-    /// Pomocne metody pro odhad nastaveni SPI protokolu.
-    /// </summary>
     public static class SpiInferenceHelper {
         /// <summary>
-        /// Odhadne nastaveni SPI protokolu ze signalovych dat.
+        /// Odhadne nastaveni SPI protokolu ze signalovych dat a zadaného mapování.
         /// </summary>
-        public static SpiSettings InferSettings(Dictionary<string, List<(double Time, double Value)>> signalData) {
-            if (!signalData.ContainsKey("CH0") || !signalData.ContainsKey("CH1"))
-                throw new InvalidOperationException("CH0 (CS) nebo CH1 (SCLK) chybí.");
+      public static SpiSettings InferSettings(
+            Dictionary<string, List<(double Time, double Value)>> signalData,
+            SpiChannelMapping mapping) {
 
-            var csSamples = signalData["CH0"]
-                .Select(t => new SignalSample(t.Item1, t.Item2 > 0.5)).ToList();
-            var sclkSamples = signalData["CH1"]
-                .Select(t => new SignalSample(t.Item1, t.Item2 > 0.5)).ToList();
+            if (!signalData.ContainsKey(mapping.Clock))
+                throw new InvalidOperationException("Zadaný kanál SCLK nebyl nalezen v datech.");
+
+            var sclkSamples = signalData[mapping.Clock]
+                .Select(t => new SignalSample(t.Time, t.Value > 0.5)).ToList();
 
             if (sclkSamples.Count < 10)
                 throw new InvalidOperationException("Nedostatek dat pro odhad SPI nastavení.");
 
-            var tempData = new Dictionary<string, List<(double Time, double Value)>> {
-                { "CH0", csSamples.Select(s => (s.Timestamp, s.State ? 1.0 : 0.0)).ToList() }
-            };
+            List<(double StartTime, double EndTime)> activeWindows;
 
-            var csAnalyzer = new DigitalSignalAnalyzer(tempData, "CH0");
-            var csSegments = csAnalyzer.GetConstantLevelSegments();
-            var csActive = csSegments.FirstOrDefault(s => s.Value == 0);
+            if (!string.IsNullOrEmpty(mapping.ChipSelect) && signalData.ContainsKey(mapping.ChipSelect)) {
+                var csAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.ChipSelect);
+                var csSegments = csAnalyzer.GetConstantLevelSegments();
+                var csActive = csSegments.FirstOrDefault(s => s.Value == 0);
 
-            if (csActive == null)
-                throw new InvalidOperationException("Nebyly nalezeny aktivní CS segmenty.");
+                if (csActive == null)
+                    throw new InvalidOperationException("Nebyly nalezeny aktivní CS segmenty.");
+
+                activeWindows = new() { (csActive.StartTime, csActive.EndTime) };
+            } else {
+                // Bez CS: 
+                double start = sclkSamples.First().Timestamp;
+                double end = sclkSamples.Last().Timestamp;
+                activeWindows = new() { (start, end) };
+            }
 
             var transitions = DetectTransitions(sclkSamples);
+
+            // Najdi prechody v ramci prenosoveho okna
             var edgesInActive = transitions
-                .Where(t => t.Timestamp >= csActive.StartTime && t.Timestamp <= csActive.EndTime)
+                .Where(t => t.Timestamp >= activeWindows[0].StartTime && t.Timestamp <= activeWindows[0].EndTime)
                 .ToList();
+
+            if (edgesInActive.Count == 0)
+                throw new InvalidOperationException("Žádné přechody hodin v rámci aktivního přenosu.");
 
             int bitsPerWordEstimate = edgesInActive.Count switch {
                 <= 4 => 4,
@@ -45,16 +55,20 @@ namespace OscilloscopeCLI.Protocols {
                 _ => 8
             };
 
+            bool firstState = sclkSamples.First(s => s.Timestamp >= activeWindows[0].StartTime).State;
+            bool cpol = firstState;
+
+            double delayAfterStart = edgesInActive.First().Timestamp - activeWindows[0].StartTime;
+            bool cpha = delayAfterStart > (1.5 * (activeWindows[0].EndTime - activeWindows[0].StartTime) / bitsPerWordEstimate);
+
             return new SpiSettings {
-                Cpol = false, // napevno
-                Cpha = false, // napevno
-                BitsPerWord = bitsPerWordEstimate // odhad pocetu bitu na prenos na zaklade poctu prechodu
+                Cpol = cpol,
+                Cpha = cpha,
+                BitsPerWord = bitsPerWordEstimate
             };
         }
 
-        /// <summary>
-        /// Detekuje prechody v signalu.
-        /// </summary>
+
         private static List<SignalSample> DetectTransitions(List<SignalSample> samples) {
             var transitions = new List<SignalSample>();
             for (int i = 1; i < samples.Count; i++) {

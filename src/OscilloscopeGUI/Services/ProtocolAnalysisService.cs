@@ -56,12 +56,12 @@ namespace OscilloscopeGUI.Services {
                     case "SPI":
                         SpiSettings spiSettings;
 
-                        if (isManual) {
+                    if (isManual) {
                             var dialog = new SpiSettingsDialog();
                             if (dialog.ShowDialog() != true) return null;
                             spiSettings = dialog.Settings;
                         } else {
-                            spiSettings = SpiInferenceHelper.InferSettings(loader.SignalData);
+                            spiSettings = SpiInferenceHelper.InferSettings(loader.SignalData, lastUsedSpiMapping!);
                         }
 
                         if (lastUsedSpiMapping == null) {
