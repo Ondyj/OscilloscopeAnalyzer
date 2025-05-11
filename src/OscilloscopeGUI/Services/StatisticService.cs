@@ -61,6 +61,7 @@ namespace OscilloscopeGUI.Services {
             StatsAvgDuration.Visibility = System.Windows.Visibility.Visible;
             StatsBaudRate.Visibility = System.Windows.Visibility.Visible;
             StatsMinMaxDuration.Visibility = System.Windows.Visibility.Visible;
+
         }
 
         public void UpdateSpiStats(SpiProtocolAnalyzer spi, List<SpiDecodedByte>? filtered = null) {
@@ -81,7 +82,7 @@ namespace OscilloscopeGUI.Services {
 
             StatsBaudRate.Text = $"Odhad: {bitRate:F0} bps | délka bitu: {bitTimeUs:F2} µs";
             StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
-            StatsSpiTransfers.Text = $"Počet přenosů (CS aktivní): {transferCount}";
+            StatsSpiTransfers.Text = $"Počet přenosů{(spi.HasChipSelect ? " (CS aktivní)" : " (bez CS)")} : {transferCount}";
             StatsMosiMiso.Text = $"Bajty MOSI / MISO: {total - misoBytes} / {misoBytes}";
             StatsTotalBytes.Text = $"Celkový počet bajtů: {total}";
             StatsErrors.Text = $"Počet bajtů s chybou: {errors}";
