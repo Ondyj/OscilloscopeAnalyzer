@@ -23,6 +23,15 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
 
     private readonly SpiChannelMapping mapping;
 
+    public int TotalBytes { get; private set; }
+    public int ErrorCount { get; private set; }
+    public double AvgDurationUs { get; private set; }
+    public double MinDurationUs { get; private set; }
+    public double MaxDurationUs { get; private set; }
+    public double EstimatedBitRate { get; private set; }
+    public double EstimatedBitTimeUs { get; private set; }
+    public int MisoByteCount { get; private set; }
+
     /// <summary>
     /// Vytvori novou instanci analyzatoru SPI protokolu.
     /// </summary>
@@ -36,7 +45,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         hasMiso = !string.IsNullOrEmpty(mapping.Miso) && signalData.ContainsKey(mapping.Miso);
 
         matchSearcher = new SpiMatchSearcher(DecodedBytes);
-        exporter = new SpiExporter(DecodedBytes, hasMiso);
+        exporter = new SpiExporter(DecodedBytes, hasMiso, this);
     }
 
     /// <summary>
@@ -105,6 +114,16 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         } else {
             AvgTransferDurationUs = 0.0;
         }
+
+        // statistiky
+        TotalBytes = DecodedBytes.Count;
+        ErrorCount = DecodedBytes.Count(b => !string.IsNullOrEmpty(b.Error));
+        AvgDurationUs = TotalBytes > 0 ? DecodedBytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+        MinDurationUs = TotalBytes > 0 ? DecodedBytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+        MaxDurationUs = TotalBytes > 0 ? DecodedBytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+        EstimatedBitTimeUs = AvgDurationUs > 0 ? (AvgDurationUs / 8.0) : 0;
+        EstimatedBitRate = EstimatedBitTimeUs > 0 ? (1_000_000.0 / EstimatedBitTimeUs) : 0;
+        MisoByteCount = DecodedBytes.Count(b => b.HasMISO);
     }
     private static Dictionary<string, List<Tuple<double, double>>> ConvertToTuple(Dictionary<string, List<(double Time, double Value)>> source) {
         return source.ToDictionary(

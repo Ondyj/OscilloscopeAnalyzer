@@ -334,7 +334,7 @@ namespace OscilloscopeGUI {
             bool isManual = ManualRadio.IsChecked == true;
             wasManualAnalysis = ManualRadio.IsChecked == true;
 
-            // 1 kanal → jen UART, 2 kanaly → UART i SPI, 3+ kanaly → jen SPI
+            // 1 kanal jen UART, 2 kanaly UART i SPI, 3+ kanaly jen SPI
             if (!CheckChannelCount(selectedProtocol, loader.SignalData.Count))
                 return;
 
@@ -558,10 +558,10 @@ namespace OscilloscopeGUI {
         /// </summary>
         private void UpdateStatistics() {
             if (activeAnalyzer is UartProtocolAnalyzer uart) {
-                statisticsService.UpdateUartStats(uart, filteredUartBytes);
+                statisticsService.UpdateUartStats(uart);
             }
             else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
-                statisticsService.UpdateSpiStats(spi, filteredSpiBytes);
+                statisticsService.UpdateSpiStats(spi);
             }
 
             if (wasManualAnalysis.HasValue) {

@@ -35,23 +35,12 @@ namespace OscilloscopeGUI.Services {
             StatsAnalysisMode = statsAnalysisMode;
         }
 
-        public void UpdateUartStats(UartProtocolAnalyzer uart, List<UartDecodedByte>? filtered = null) {
-            var bytes = filtered ?? uart.DecodedBytes;
-            int total = bytes.Count;
-            int errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
-            double avgDurationUs = total > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-            double minUs = total > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-            double maxUs = total > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-
-            double bitsPerByte = uart.Settings.DataBits + 1 + (uart.Settings.Parity == Parity.None ? 0 : 1) + uart.Settings.StopBits;
-            double avgBaud = avgDurationUs > 0 ? (bitsPerByte * 1_000_000.0 / avgDurationUs) : 0;
-            double bitTimeUs = avgBaud > 0 ? (1_000_000.0 / avgBaud) : 0;
-
-            StatsTotalBytes.Text = $"Celkový počet bajtů: {total}";
-            StatsErrors.Text = $"Počet bajtů s chybou: {errors}";
-            StatsAvgDuration.Text = $"Průměrná délka bajtu: {avgDurationUs:F1} µs";
-            StatsBaudRate.Text = $"Odhad: {avgBaud:F0} baud | délka bitu: {bitTimeUs:F2} µs";
-            StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
+        public void UpdateUartStats(UartProtocolAnalyzer uart) {
+            StatsTotalBytes.Text = $"Celkový počet bajtů: {uart.TotalBytes}";
+            StatsErrors.Text = $"Počet bajtů s chybou: {uart.ErrorCount}";
+            StatsAvgDuration.Text = $"Průměrná délka bajtu: {uart.AvgDurationUs:F1} µs";
+            StatsBaudRate.Text = $"Odhad: {uart.EstimatedBaudRate:F0} baud | délka bitu: {uart.EstimatedBitTimeUs:F2} µs";
+            StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {uart.MinDurationUs:F1} / {uart.MaxDurationUs:F1} µs";
 
             StatsSpiTransfers.Visibility = System.Windows.Visibility.Collapsed;
             StatsMosiMiso.Visibility = System.Windows.Visibility.Collapsed;
@@ -64,29 +53,14 @@ namespace OscilloscopeGUI.Services {
 
         }
 
-        public void UpdateSpiStats(SpiProtocolAnalyzer spi, List<SpiDecodedByte>? filtered = null) {
-            var bytes = filtered ?? spi.DecodedBytes;
-            int total = bytes.Count;
-            int errors = bytes.Count(b => !string.IsNullOrEmpty(b.Error));
-            double avgDurationUs = total > 0 ? bytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-            double minUs = total > 0 ? bytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-            double maxUs = total > 0 ? bytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
-
-            int transferCount = spi.TransferCount;
-            double avgTransferLength = spi.AvgTransferDurationUs;
-            int misoBytes = bytes.Count(b => b.HasMISO);
-
-            // Odhad rychlosti SPI hodin (bit rate) = 8 bitu / prumerna delka bajtu
-            double bitTimeUs = avgDurationUs > 0 ? (avgDurationUs / 8.0) : 0;
-            double bitRate = bitTimeUs > 0 ? (1_000_000.0 / bitTimeUs) : 0;
-
-            StatsBaudRate.Text = $"Odhad: {bitRate:F0} bps | délka bitu: {bitTimeUs:F2} µs";
-            StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {minUs:F1} / {maxUs:F1} µs";
-            StatsSpiTransfers.Text = $"Počet přenosů{(spi.HasChipSelect ? " (CS aktivní)" : " (bez CS)")} : {transferCount}";
-            StatsMosiMiso.Text = $"Bajty MOSI / MISO: {total - misoBytes} / {misoBytes}";
-            StatsTotalBytes.Text = $"Celkový počet bajtů: {total}";
-            StatsErrors.Text = $"Počet bajtů s chybou: {errors}";
-            StatsAvgDuration.Text = $"Průměrná délka bajtu: {avgDurationUs:F1} µs";
+        public void UpdateSpiStats(SpiProtocolAnalyzer spi) {
+            StatsTotalBytes.Text = $"Celkový počet bajtů: {spi.TotalBytes}";
+            StatsErrors.Text = $"Počet bajtů s chybou: {spi.ErrorCount}";
+            StatsAvgDuration.Text = $"Průměrná délka bajtu: {spi.AvgDurationUs:F1} µs";
+            StatsBaudRate.Text = $"Odhad: {spi.EstimatedBitRate:F0} bps | délka bitu: {spi.EstimatedBitTimeUs:F2} µs";
+            StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {spi.MinDurationUs:F1} / {spi.MaxDurationUs:F1} µs";
+            StatsSpiTransfers.Text = $"Počet přenosů{(spi.HasChipSelect ? " (CS aktivní)" : " (bez CS)")} : {spi.TransferCount}";
+            StatsMosiMiso.Text = $"Bajty MOSI / MISO: {spi.TotalBytes - spi.MisoByteCount} / {spi.MisoByteCount}";
 
             StatsSpiTransfers.Visibility = System.Windows.Visibility.Visible;
             StatsMosiMiso.Visibility = System.Windows.Visibility.Visible;

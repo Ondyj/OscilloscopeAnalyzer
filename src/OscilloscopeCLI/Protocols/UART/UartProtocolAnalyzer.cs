@@ -15,6 +15,15 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     private UartMatchSearcher matchSearcher; // Vyhledavani shod v dekodovanych datech
     private UartExporter exporter; // Export dekodovanych dat do souboru
     public UartSettings Settings => settings;
+
+    // Statistiky
+    public int TotalBytes { get; private set; }
+    public int ErrorCount { get; private set; }
+    public double AvgDurationUs { get; private set; }
+    public double MinDurationUs { get; private set; }
+    public double MaxDurationUs { get; private set; }
+    public double EstimatedBaudRate { get; private set; }
+    public double EstimatedBitTimeUs { get; private set; }
     
 
     /// <summary>
@@ -57,8 +66,19 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
             AnalyzeChannel(channelName, samples, bitTime, idleLevel);
         }
 
+        // Statistiky
+        TotalBytes = DecodedBytes.Count;
+        ErrorCount = DecodedBytes.Count(b => !string.IsNullOrEmpty(b.Error));
+        AvgDurationUs = TotalBytes > 0 ? DecodedBytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+        MinDurationUs = TotalBytes > 0 ? DecodedBytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+        MaxDurationUs = TotalBytes > 0 ? DecodedBytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
+
+        double bitsPerByte = settings.DataBits + 1 + (settings.Parity == Parity.None ? 0 : 1) + settings.StopBits;
+        EstimatedBaudRate = AvgDurationUs > 0 ? (bitsPerByte * 1_000_000.0 / AvgDurationUs) : 0;
+        EstimatedBitTimeUs = EstimatedBaudRate > 0 ? (1_000_000.0 / EstimatedBaudRate) : 0;
+
         matchSearcher = new UartMatchSearcher(DecodedBytes);
-        exporter = new UartExporter(DecodedBytes, channelRenameMap);
+        exporter = new UartExporter(DecodedBytes, channelRenameMap, this);
     }
 
     /// <summary>
