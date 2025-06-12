@@ -79,7 +79,7 @@ namespace OscilloscopeGUI.Services {
         }
 
         /// <summary>
-        /// Resetuje pohled na graf a zarovna zacatek signalu do stredu
+        /// Resetuje pohled na graf a zarovna zacatek signalu doleva
         /// </summary>
         public void ResetView(double signalStartTime) {
             plot.Plot.Axes.AutoScale();
@@ -87,14 +87,14 @@ namespace OscilloscopeGUI.Services {
 
             double baseRange = limits.XRange.Max - limits.XRange.Min;
 
-            // Oprava: pouzij nasobeni, ne deleni
             double zoomedRange = baseRange * maxZoomOutFactor;
 
             baseLimits = limits;
             baseXRange = baseRange;
 
-            double newXMin = signalStartTime - zoomedRange / 2;
-            double newXMax = signalStartTime + zoomedRange / 2;
+            // Zarovnani zacatku signalu doleva
+            double newXMin = signalStartTime;
+            double newXMax = signalStartTime + zoomedRange;
 
             plot.Plot.Axes.SetLimitsX(newXMin, newXMax);
             plot.Refresh();
