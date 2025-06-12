@@ -25,7 +25,7 @@ public class SpiAnnotationRenderer : IAnnotationRenderer {
                 continue;
 
             bool hasError = !string.IsNullOrEmpty(b.Error);
-            var color = hasError ? Colors.Red : (i % 2 == 0 ? Colors.Gray : Colors.Black);
+            var color = hasError ? Colors.Red : Colors.Black;
 
             var textMosi = plot.Add.Text(FormatByte(b.ValueMOSI, format), centerX, 1.3);
             textMosi.LabelStyle.FontSize = 16;

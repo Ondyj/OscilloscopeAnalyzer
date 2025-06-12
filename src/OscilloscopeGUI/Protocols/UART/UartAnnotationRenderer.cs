@@ -21,7 +21,7 @@ public class UartAnnotationRenderer : IAnnotationRenderer {
                 continue;
 
             var isError = !string.IsNullOrEmpty(b.Error);
-            var color = isError ? Colors.Red : (i % 2 == 0 ? Colors.Gray : Colors.Black);
+            var color = isError ? Colors.Red : Colors.Black;
 
             var text = plot.Add.Text(FormatByte(b.Value, format), centerX, 1.3);
             text.LabelStyle.FontSize = 16;
