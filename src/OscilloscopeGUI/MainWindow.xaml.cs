@@ -9,6 +9,8 @@ using OscilloscopeGUI.Plotting;
 using OscilloscopeGUI.Services;
 using System.IO;
 
+using System.Runtime.InteropServices;
+
 namespace OscilloscopeGUI {
     public partial class MainWindow : Window {
       
@@ -48,11 +50,23 @@ namespace OscilloscopeGUI {
         private double? timeMark2 = null;
         private ScottPlot.Plottables.VerticalLine? line1 = null;
         private ScottPlot.Plottables.VerticalLine? line2 = null;
+        private bool isDraggingLine = false;
+        private ScottPlot.Plottables.VerticalLine? draggedLine = null;
+        private double? measurementCenterX = null;
+
+
+
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool AllocConsole();
 
         /// <summary>
         /// Konstruktor hlavniho okna aplikace
         /// </summary>
         public MainWindow() {
+            AllocConsole();
+
             InitializeComponent();
             InitializePlot();
             InitializeEvents();
@@ -97,30 +111,86 @@ namespace OscilloscopeGUI {
             };
 
             plot.MouseLeftButtonDown += (s, e) => {
-                isDragging = true;
-                lastMousePosition = e.GetPosition(plot);
-                plot.CaptureMouse();
-                UpdateAnnotations();
-            };
+                Point mousePos = e.GetPosition(plot);
 
-            plot.MouseLeftButtonUp += (s, e) => {
-                isDragging = false;
-                plot.ReleaseMouseCapture();
-                UpdateAnnotations();
-            };
+                var source = PresentationSource.FromVisual(this);
+                double dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
+                var pixel = new ScottPlot.Pixel(mousePos.X * dpiX, mousePos.Y * dpiX);
 
-            plot.MouseMove += (s, e) => {
-                if (isDragging) {
-                    Point currentPos = e.GetPosition(plot);
-                    double deltaX = currentPos.X - lastMousePosition.X;
-                    navService.PanByPixelDelta(deltaX);
-                    lastMousePosition = currentPos;
+                if (line1 != null && Math.Abs(pixel.X - plot.Plot.GetPixel(new ScottPlot.Coordinates(line1.X, 0)).X) < 5) {
+                    isDraggingLine = true;
+                    draggedLine = line1;
+                    plot.CaptureMouse();
+                } else if (line2 != null && Math.Abs(pixel.X - plot.Plot.GetPixel(new ScottPlot.Coordinates(line2.X, 0)).X) < 5) {
+                    isDraggingLine = true;
+                    draggedLine = line2;
+                    plot.CaptureMouse();
+                } else {
+                    isDragging = true;
+                    lastMousePosition = mousePos;
+                    plot.CaptureMouse();
                 }
+                UpdateAnnotations();
             };
+
+        plot.MouseLeftButtonUp += (s, e) => {
+            isDragging = false;
+            isDraggingLine = false;
+            draggedLine = null;
+            plot.ReleaseMouseCapture();
+            UpdateAnnotations();
+        };
+
+        plot.MouseMove += (s, e) => {
+            Point currentPos = e.GetPosition(plot);
+            var source = PresentationSource.FromVisual(this);
+            double dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
+
+            if (isDraggingLine && draggedLine != null) {
+                var pixel = new ScottPlot.Pixel(currentPos.X * dpiX, currentPos.Y * dpiX);
+                var coord = plot.Plot.GetCoordinates(pixel);
+                draggedLine.X = coord.X;
+
+                if (draggedLine == line1) timeMark1 = coord.X;
+                if (draggedLine == line2) timeMark2 = coord.X;
+
+                ShowTimeDifference();
+                plot.Refresh();
+            }
+            else if (isDragging) {
+                double deltaX = currentPos.X - lastMousePosition.X;
+                navService.PanByPixelDelta(deltaX);
+                lastMousePosition = currentPos;
+            }
+        };
 
             plot.MouseRightButtonDown += Plot_MouseRightButtonDown;
             plot.MouseRightButtonUp += (s, e) => UpdateAnnotations();
             plot.MouseWheel += (s, e) => UpdateAnnotations();
+            plot.MouseMove += Plot_MouseMove_UpdateCursor;
+        }
+
+        private void Plot_MouseMove_UpdateCursor(object sender, MouseEventArgs e) {
+            if (line1 == null && line2 == null)
+                return;
+
+            // DPI
+            var source = PresentationSource.FromVisual(this);
+            double dpiX = 1.0;
+            if (source != null)
+                dpiX = source.CompositionTarget.TransformToDevice.M11;
+
+            // Pozice mysi
+            Point mousePos = e.GetPosition(plot);
+
+            // prevod na ScottPlot.Pixel
+            var pixel = new ScottPlot.Pixel(mousePos.X * dpiX, mousePos.Y * dpiX);
+
+            // Porovnani vzdalenosti od kazde cary v px
+            bool nearLine1 = line1 != null && Math.Abs(pixel.X - plot.Plot.GetPixel(new ScottPlot.Coordinates(line1.X, 0)).X) < 5;
+            bool nearLine2 = line2 != null && Math.Abs(pixel.X - plot.Plot.GetPixel(new ScottPlot.Coordinates(line2.X, 0)).X) < 5;
+
+            plot.Cursor = (nearLine1 || nearLine2) ? Cursors.SizeWE : Cursors.Arrow;
         }
 
         /// <summary>
@@ -486,20 +556,26 @@ namespace OscilloscopeGUI {
                 MeasurementInfo.Text = $"{formattedDelta}";
                 MeasurementInfo.Visibility = Visibility.Visible;
 
-                // Vypocet stredu v case
-                double centerX = (timeMark1.Value + timeMark2.Value) / 2;
+                measurementCenterX = (timeMark1.Value + timeMark2.Value) / 2;
 
-                // Ziskani DPI transformace
-                var source = PresentationSource.FromVisual(this);
-                double dpiX = 1.0;
-                if (source != null)
-                    dpiX = source.CompositionTarget.TransformToDevice.M11;
-
-                // Prevadi stred na pixely a zarovna text doprostred
-                var pixel = plot.Plot.GetPixel(new ScottPlot.Coordinates(centerX, 0));
-                double pixelX = pixel.X / dpiX;
-                MeasurementInfo.Margin = new Thickness(pixelX - MeasurementInfo.ActualWidth / 2, 10, 0, 0);
+                UpdateMeasurementInfoPosition();
             }
+        }
+
+        /// <summary>
+        /// Prepocita pozici popisku mezi dvema znackami podle centerX
+        /// </summary>
+        private void UpdateMeasurementInfoPosition() {
+            if (!measurementCenterX.HasValue)
+                return;
+
+            var source = PresentationSource.FromVisual(this);
+            double dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
+
+            var pixel = plot.Plot.GetPixel(new ScottPlot.Coordinates(measurementCenterX.Value, 0));
+            double pixelX = pixel.X / dpiX;
+
+            MeasurementInfo.Margin = new Thickness(pixelX - MeasurementInfo.ActualWidth / 2, 10, 0, 0);
         }
 
         /// <summary>
