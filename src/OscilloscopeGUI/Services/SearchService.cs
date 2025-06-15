@@ -42,33 +42,55 @@ namespace OscilloscopeGUI.Services {
         }
 
         /// <summary>
-        /// Spusti vyhledavani hodnoty v hex formatu v dekodovanych datech.
+        /// Spusti vyhledavani hodnoty v dekodovanych datech.
         /// </summary>
         public void Search(string query) {
-            if (analyzer == null) return;
+            if (analyzer == null)
+                return;
 
-            string[] parts = query.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            string trimmedQuery = query.Trim();
+
+            // === hledani vseho ===
+            if (string.IsNullOrEmpty(trimmedQuery) || trimmedQuery == "(0xFF/65/A)") {
+                searchedSequence = null;
+                var mode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
+                analyzer.Search(Array.Empty<byte>(), mode); // prazdna sekvence = hledat vse
+
+                if (analyzer.HasMatches()) {
+                    currentMatchIndex = 0;
+                    ShowMatch();
+                    if (navigationPanel != null)
+                        navigationPanel.Visibility = Visibility.Visible;
+                } else {
+                    MessageBox.Show("Pro zvolený filtr nebyly nalezeny žádné hodnoty.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+
+                return;
+            }
+
+            // === Původní implementace ===
+            string[] parts = trimmedQuery.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
             List<byte> byteList = new();
 
             foreach (string part in parts) {
-                string trimmed = part.Trim();
+                string token = part.Trim();
 
-                if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) {
-                    if (byte.TryParse(trimmed.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
+                if (token.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) {
+                    if (byte.TryParse(token.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
                         byteList.Add(b);
                     else {
-                        ShowInvalidInput(trimmed);
+                        ShowInvalidInput(token);
                         return;
                     }
                 }
-                else if (trimmed.Length == 1 && !char.IsDigit(trimmed[0])) {
-                    byteList.Add((byte)trimmed[0]);
+                else if (token.Length == 1 && !char.IsDigit(token[0])) {
+                    byteList.Add((byte)token[0]);
                 }
-                else if (byte.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out byte b2)) {
+                else if (byte.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out byte b2)) {
                     byteList.Add(b2);
                 }
                 else {
-                    ShowInvalidInput(trimmed);
+                    ShowInvalidInput(token);
                     return;
                 }
             }
@@ -78,19 +100,18 @@ namespace OscilloscopeGUI.Services {
                 return;
             }
 
-            var sequence = byteList.ToArray();
-
-            searchedSequence = sequence;
-            var mode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
-            analyzer.Search(sequence, mode);
+            searchedSequence = byteList.ToArray();
+            var filterMode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
+            analyzer.Search(searchedSequence, filterMode);
 
             if (analyzer.HasMatches()) {
                 currentMatchIndex = 0;
                 ShowMatch();
-                if (navigationPanel != null) navigationPanel.Visibility = Visibility.Visible;
-            }
-            else {
+                if (navigationPanel != null)
+                    navigationPanel.Visibility = Visibility.Visible;
+            } else {
                 MessageBox.Show($"Sekvence nebyla nalezena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
             }
         }
 
@@ -108,11 +129,15 @@ namespace OscilloscopeGUI.Services {
         /// Zobrazi aktualni nalezenou hodnotu v grafu a posune se na ni.
         /// </summary>
         public void ShowMatch() {
-            if (analyzer == null || searchedSequence == null || searchedSequence.Length == 0)
+            if (analyzer == null || analyzer.MatchCount == 0)
                 return;
 
             var mode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
-            analyzer.Search(searchedSequence, mode);
+
+            if (searchedSequence == null)
+                analyzer.Search(Array.Empty<byte>(), mode);
+            else
+                analyzer.Search(searchedSequence, mode);
 
             if (!analyzer.HasMatches()) {
                 MessageBox.Show(
@@ -149,8 +174,14 @@ namespace OscilloscopeGUI.Services {
         /// Presune se na dalsi vysledek vyhledavani.
         /// </summary>
         public void NextMatch() {
-            if (analyzer == null || analyzer.MatchCount == 0) {
-                MessageBox.Show("Žádná další nalezená hodnota.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (analyzer == null)
+                return;
+
+            var mode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
+            analyzer.Search(searchedSequence ?? Array.Empty<byte>(), mode);
+
+            if (!analyzer.HasMatches()) {
+                MessageBox.Show("Nenalezena žádná odpovídající hodnota.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -161,8 +192,14 @@ namespace OscilloscopeGUI.Services {
         /// Presune se na predchozi vysledek vyhledavani.
         /// </summary>
         public void PreviousMatch() {
-            if (analyzer == null || analyzer.MatchCount == 0) {
-                MessageBox.Show("Žádná předchozí nalezená hodnota.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (analyzer == null)
+                return;
+
+            var mode = getFilterModeCallback?.Invoke() ?? ByteFilterMode.All;
+            analyzer.Search(searchedSequence ?? Array.Empty<byte>(), mode);
+
+            if (!analyzer.HasMatches()) {
+                MessageBox.Show("Nenalezena žádná odpovídající hodnota.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 

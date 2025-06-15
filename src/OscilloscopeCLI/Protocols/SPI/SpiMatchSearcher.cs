@@ -23,7 +23,6 @@ public class SpiMatchSearcher {
     /// <param name="value">Hledana hodnota bajtu.</param>
     public void Search(byte[] sequence, ByteFilterMode filterMode) {
         matches = new List<SpiDecodedByte>();
-        if (sequence == null || sequence.Length == 0) return;
 
         var filtered = decodedBytes
             .Where(b =>
@@ -32,19 +31,30 @@ public class SpiMatchSearcher {
                 (filterMode == ByteFilterMode.NoErrors && string.IsNullOrEmpty(b.Error)))
             .ToList();
 
-        for (int i = 0; i <= filtered.Count - sequence.Length; i++) {
+        // hledani vseho
+        if (sequence == null || sequence.Length == 0)
+        {
+            matches.AddRange(filtered);
+            return;
+        }
+
+        for (int i = 0; i <= filtered.Count - sequence.Length; i++)
+        {
             bool match = true;
-            for (int j = 0; j < sequence.Length; j++) {
+            for (int j = 0; j < sequence.Length; j++)
+            {
                 byte valMosi = filtered[i + j].ValueMOSI;
                 byte valMiso = filtered[i + j].ValueMISO;
 
-                if (valMosi != sequence[j] && valMiso != sequence[j]) {
+                if (valMosi != sequence[j] && valMiso != sequence[j])
+                {
                     match = false;
                     break;
                 }
             }
-            if (match) {
-                matches.Add(filtered[i]); // přidáme první bajt sekvence jako výsledek
+            if (match)
+            {
+                matches.Add(filtered[i]); // pridame prvni bajt sekvence jako vysledek
             }
         }
     }

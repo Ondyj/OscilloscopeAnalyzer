@@ -196,7 +196,8 @@ namespace OscilloscopeGUI {
         /// <summary>
         /// Aktualizuje anotace v grafu podle aktualne vybraneho analyzatoru
         /// </summary>
-        private void UpdateAnnotations() {
+        private void UpdateAnnotations()
+        {
             // Smazat predchozi anotace
             foreach (var label in byteLabels)
                 plot.Plot.Remove(label);
@@ -215,15 +216,37 @@ namespace OscilloscopeGUI {
 
             plot.Refresh();
         }
-  
+
+        private void ClearPreviousAnalysis() {
+            filteredUartBytes = null;
+            filteredSpiBytes = null;
+            MeasurementInfo.Visibility = Visibility.Collapsed;
+            ResultInfo.Text = "";
+            ResultNavigationPanel.Visibility = Visibility.Collapsed;
+
+            // Smazat anotace
+            foreach (var label in byteLabels)
+                plot.Plot.Remove(label);
+            byteLabels.Clear();
+
+            foreach (var line in byteStartLines)
+                plot.Plot.Remove(line);
+            byteStartLines.Clear();
+
+            plot.Refresh();
+        }
+
         /// <summary>
         /// Reaguje na zmenu formatu bajtu (HEX/DEC/ASCII) a aktualizuje anotace v grafu
         /// </summary>
         /// <param name="sender">Odesilatel udalosti (radio button)</param>
         /// <param name="e">Argument udalosti</param>
-        private void FormatChanged(object sender, RoutedEventArgs e) {
-            if (sender is RadioButton rb && rb.IsChecked == true) {
-                switch (rb.Content.ToString()) {
+        private void FormatChanged(object sender, RoutedEventArgs e)
+        {
+            if (sender is RadioButton rb && rb.IsChecked == true)
+            {
+                switch (rb.Content.ToString())
+                {
                     case "HEX":
                         currentFormat = ByteDisplayFormat.Hex;
                         break;
@@ -403,6 +426,7 @@ namespace OscilloscopeGUI {
         /// Spusti analyzu signalu podle zvoleneho protokolu
         /// </summary>
         private void AnalyzeButton_Click(object sender, RoutedEventArgs e) {
+
             string selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "";
             bool isManual = ManualRadio.IsChecked == true;
             wasManualAnalysis = ManualRadio.IsChecked == true;
@@ -420,10 +444,16 @@ namespace OscilloscopeGUI {
                 this
             );
 
-            if (analyzer != null) {
+            if (activeAnalyzer != null){
+            ClearPreviousAnalysis();
+            }
+
+            if (analyzer != null)
+            {
                 analyzer.Analyze();
                 SetAnalyzer(analyzer);
                 UpdateStatistics();
+                UpdateAnnotations();
                 MessageBox.Show($"{analyzer.ProtocolName} analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
@@ -431,8 +461,10 @@ namespace OscilloscopeGUI {
         /// <summary>
         /// Aplikuje filtr na dekodovana data podle chyby (UART nebo SPI). Obnovi hledani a anotace
         /// </summary>
-        private void ApplyFilter(string filter) {
-            if (activeAnalyzer is UartProtocolAnalyzer uart) {
+        private void ApplyFilter(string filter)
+        {
+            if (activeAnalyzer is UartProtocolAnalyzer uart)
+            {
                 filteredUartBytes = filter switch
                 {
                     "error" => uart.DecodedBytes.Where(b => !string.IsNullOrEmpty(b.Error)).ToList(),
@@ -440,7 +472,8 @@ namespace OscilloscopeGUI {
                     _ => uart.DecodedBytes.ToList()
                 };
             }
-            else if (activeAnalyzer is SpiProtocolAnalyzer spi) {
+            else if (activeAnalyzer is SpiProtocolAnalyzer spi)
+            {
                 filteredSpiBytes = filter switch
                 {
                     "error" => spi.DecodedBytes.Where(b => !string.IsNullOrEmpty(b.Error)).ToList(),
@@ -474,6 +507,13 @@ namespace OscilloscopeGUI {
         /// Spusti vyhledavani v dekodovanych datech
         /// </summary>
         private void SearchButton_Click(object sender, RoutedEventArgs e) {
+
+            if (activeAnalyzer == null)
+            {
+                MessageBox.Show("Nejdříve proveďte analýzu dat.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             searchService.Search(SearchBox.Text.Trim());
         }
 
@@ -625,6 +665,7 @@ namespace OscilloscopeGUI {
             MeasurementInfo.Visibility = Visibility.Collapsed;
 
             statisticsService.Reset();
+            ResultNavigationPanel.Visibility = Visibility.Collapsed;
 
             plot.Plot.Clear();
             plot.Refresh();

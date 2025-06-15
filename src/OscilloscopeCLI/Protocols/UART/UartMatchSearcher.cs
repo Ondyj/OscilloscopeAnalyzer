@@ -22,31 +22,41 @@ public class UartMatchSearcher {
     /// Vyhleda vsechny bajty, ktere odpovidaji zadane hodnote.
     /// </summary>
     /// <param name="value">Hledana hodnota bajtu.</param>
-    public void Search(byte[] sequence, ByteFilterMode filterMode) {
-        matches = new List<UartDecodedByte>();
-
-        if (sequence == null || sequence.Length == 0)
-            return;
+public void Search(byte[] sequence, ByteFilterMode filterMode)
+{
+    matches = new List<UartDecodedByte>();
 
         var filtered = decodedBytes.Where(b =>
             filterMode == ByteFilterMode.All ||
             (filterMode == ByteFilterMode.OnlyErrors && !string.IsNullOrEmpty(b.Error)) ||
             (filterMode == ByteFilterMode.NoErrors && string.IsNullOrEmpty(b.Error))
         ).ToList();
+Console.WriteLine($"DecodedBytes: {decodedBytes.Count}, Filtered: {filtered.Count}, Sequence length: {sequence?.Length ?? 0}");
 
-        for (int i = 0; i <= filtered.Count - sequence.Length; i++) {
-            bool match = true;
-            for (int j = 0; j < sequence.Length; j++) {
-                if (filtered[i + j].Value != sequence[j]) {
-                    match = false;
-                    break;
-                }
-            }
-            if (match) {
-                matches.Add(filtered[i]);
+    // Pokud není specifikována žádná sekvence, vrať všechny odpovídající položky podle filtru
+    if (sequence == null || sequence.Length == 0)
+    {
+        matches.AddRange(filtered);
+        return;
+    }
+
+    for (int i = 0; i <= filtered.Count - sequence.Length; i++)
+    {
+        bool match = true;
+        for (int j = 0; j < sequence.Length; j++)
+        {
+            if (filtered[i + j].Value != sequence[j])
+            {
+                match = false;
+                break;
             }
         }
+        if (match)
+        {
+            matches.Add(filtered[i]);
+        }
     }
+}
 
     /// <summary>
     /// Vrati, zda existuji nejake nalezene vysledky.
