@@ -7,6 +7,7 @@ using OscilloscopeCLI.Protocols;
 namespace OscilloscopeGUI {
     public partial class SpiChannelMappingDialog : Window {
         public SpiChannelMapping Mapping { get; private set; } = new();
+        public Dictionary<string, int> RoleToIndex { get; private set; } = new();
 
         // Trida reprezentujici jeden radek (kanal + zvolena role + combo)
         public class ChannelRole {
@@ -54,6 +55,11 @@ namespace OscilloscopeGUI {
             // Ziska z comboboxu vybrane hodnoty
             foreach (var role in roles)
                 role.SelectedRole = role.ComboBox?.SelectedItem?.ToString() ?? "Žádná";
+
+            RoleToIndex = roles
+                .Select((r, i) => new { r.SelectedRole, Index = i })
+                .Where(x => x.SelectedRole != "Žádná")
+                .ToDictionary(x => x.SelectedRole, x => x.Index);
 
             var grouped = roles
                 .Where(r => r.SelectedRole != "Žádná")

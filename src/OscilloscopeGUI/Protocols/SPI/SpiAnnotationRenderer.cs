@@ -10,12 +10,18 @@ public class SpiAnnotationRenderer : IAnnotationRenderer {
         Plot plot,
         ByteDisplayFormat format,
         List<Text> byteLabels,
-        List<IPlottable> byteStartLines) {
+        List<IPlottable> byteStartLines,
+        IReadOnlyDictionary<string, double> channelOffsets)
+    {
         if (analyzer is not SpiProtocolAnalyzer spi)
             return;
 
         var limits = plot.Axes.GetLimits();
         double xMin = limits.Left, xMax = limits.Right;
+
+       // Console.WriteLine("[SPI Renderer] --- Dostupné offsety ---");
+        /*foreach (var kvp in channelOffsets)
+            Console.WriteLine($"  {kvp.Key} => {kvp.Value:F2}");*/
 
         var bytes = spi.DecodedBytes;
         for (int i = 0; i < bytes.Count; i++) {
@@ -27,14 +33,18 @@ public class SpiAnnotationRenderer : IAnnotationRenderer {
             bool hasError = !string.IsNullOrEmpty(b.Error);
             var color = hasError ? Colors.Red : Colors.Black;
 
-            var textMosi = plot.Add.Text(FormatByte(b.ValueMOSI, format), centerX, 1.3);
+            double yMosi = channelOffsets.TryGetValue("MOSI", out var mo) ? mo : 0;
+            //Console.WriteLine($"[SPI] Bajt {i} MOSI: yMosi = {yMosi:F2}");
+            var textMosi = plot.Add.Text(FormatByte(b.ValueMOSI, format), centerX, yMosi + 1.3);
             textMosi.LabelStyle.FontSize = 16;
             textMosi.LabelStyle.Bold = true;
             textMosi.LabelFontColor = color;
             byteLabels.Add(textMosi);
 
             if (b.HasMISO) {
-                var textMiso = plot.Add.Text(FormatByte(b.ValueMISO, format), centerX, -1.5);
+                double yMiso = channelOffsets.TryGetValue("MISO", out var mi) ? mi : 0;
+                //Console.WriteLine($"[SPI] Bajt {i} MISO: yMiso = {yMiso:F2}");
+                var textMiso = plot.Add.Text(FormatByte(b.ValueMISO, format), centerX, yMiso + 1.3);
                 textMiso.LabelStyle.FontSize = 16;
                 textMiso.LabelStyle.Bold = true;
                 textMiso.LabelFontColor = color;

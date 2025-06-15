@@ -8,6 +8,7 @@ namespace OscilloscopeGUI {
     public partial class UartChannelMappingDialog : Window {
         // Vysledne prirazeni kanal => role
         public Dictionary<string, string> ChannelRenames { get; private set; } = new();
+        public Dictionary<string, int> RoleToIndex { get; private set; } = new();
 
         // Pomocna trida pro kazdy radek
         private class ChannelRole {
@@ -36,6 +37,11 @@ namespace OscilloscopeGUI {
             // Nacteni vybrane role z ComboBoxu
             foreach (var r in roles)
                 r.SelectedRole = r.ComboBox.SelectedItem?.ToString() ?? "Žádná";
+
+            RoleToIndex = roles
+                .Select((r, i) => new { r.SelectedRole, Index = i })
+                .Where(x => x.SelectedRole != "Žádná")
+                .ToDictionary(x => x.SelectedRole, x => x.Index);
 
             // Seskupeni podle vybrane role (vynechame "Zadna")
             var grouped = roles

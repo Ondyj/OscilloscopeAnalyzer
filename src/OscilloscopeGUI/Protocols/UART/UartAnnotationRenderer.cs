@@ -5,7 +5,14 @@ using ScottPlot.Plottables;
 namespace OscilloscopeGUI;
 
 public class UartAnnotationRenderer : IAnnotationRenderer {
-    public void Render(IProtocolAnalyzer analyzer, Plot plot, ByteDisplayFormat format, List<Text> byteLabels, List<IPlottable> byteStartLines) {
+        public void Render(
+        IProtocolAnalyzer analyzer,
+        Plot plot,
+        ByteDisplayFormat format,
+        List<Text> byteLabels,
+        List<IPlottable> byteStartLines,
+        IReadOnlyDictionary<string, double> channelOffsets) 
+    {
         if (analyzer is not UartProtocolAnalyzer uart)
             return;
 
@@ -14,16 +21,33 @@ public class UartAnnotationRenderer : IAnnotationRenderer {
         double xMax = limits.Right;
 
         var bytes = uart.DecodedBytes;
+        bool printedHeader = false;
+
         for (int i = 0; i < bytes.Count; i++) {
             var b = bytes[i];
             double centerX = (b.StartTime + b.EndTime) / 2;
             if (centerX < xMin || centerX > xMax)
                 continue;
 
+            string channel = b.Channel ?? "null";
+            if (!printedHeader) {
+                //Console.WriteLine("[UartAnnotationRenderer] --- Dostupne offsety ---");
+                foreach (var kvp in channelOffsets)
+                    Console.WriteLine($"  {kvp.Key} => {kvp.Value:F2}");
+                printedHeader = true;
+            }
+
+            if (!channelOffsets.TryGetValue(channel, out double yOffset)) {
+                //Console.WriteLine($"[UartAnnotationRenderer] Kanal '{channel}' nema offset – anotace se vykresli na 0.0");
+                yOffset = 0;
+            } else {
+                //Console.WriteLine($"[UartAnnotationRenderer] Bajt na kanalu '{channel}' bude vykreslen na y={yOffset:F2}");
+            }
+
             var isError = !string.IsNullOrEmpty(b.Error);
             var color = isError ? Colors.Red : Colors.Black;
 
-            var text = plot.Add.Text(FormatByte(b.Value, format), centerX, 1.3);
+            var text = plot.Add.Text(FormatByte(b.Value, format), centerX, yOffset + 1.3);
             text.LabelStyle.FontSize = 16;
             text.LabelStyle.Bold = true;
             text.LabelFontColor = color;

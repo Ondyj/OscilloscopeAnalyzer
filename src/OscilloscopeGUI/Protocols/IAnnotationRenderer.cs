@@ -4,6 +4,6 @@ using ScottPlot.Plottables;
 
 namespace OscilloscopeGUI {
     public interface IAnnotationRenderer {
-         void Render(IProtocolAnalyzer analyzer, Plot plot, ByteDisplayFormat format, List<Text> byteLabels, List<IPlottable> byteStartLines);
+         void Render(IProtocolAnalyzer analyzer, Plot plot, ByteDisplayFormat format, List<Text> byteLabels, List<IPlottable> byteStartLines, IReadOnlyDictionary<string, double> channelOffsets);
     }
 }

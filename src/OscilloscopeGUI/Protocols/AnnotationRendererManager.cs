@@ -16,9 +16,9 @@ namespace OscilloscopeGUI {
             Plot plot,
             ByteDisplayFormat format,
             List<Text> byteLabels,
-            List<IPlottable> byteStartLines) {
+            List<IPlottable> byteStartLines, IReadOnlyDictionary<string, double> channelOffsets) {
             if (renderers.TryGetValue(analyzer.GetType(), out var renderer))
-                renderer.Render(analyzer, plot, format, byteLabels, byteStartLines);
+                 renderer.Render(analyzer, plot, format, byteLabels, byteStartLines, channelOffsets);
         }
 
         public IAnnotationRenderer? GetRendererFor(IProtocolAnalyzer analyzer) {
