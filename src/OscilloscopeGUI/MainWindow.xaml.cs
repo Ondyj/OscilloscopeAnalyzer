@@ -332,42 +332,75 @@ namespace OscilloscopeGUI {
         /// <summary>
         /// Nacte CSV soubor, vykresli signal a provede mapovani kanalu podle zvoleneho protokolu
         /// </summary>
-        private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
-
-            var result = await fileLoadingService.LoadAndMapAsync(loader, this);
-            if (!result.Success)
+        private async void LoadCsv_Click(object sender, RoutedEventArgs e)
+        {
+            var filePick = fileLoadingService.PromptForFileOnly(this);
+            if (!filePick.Success || string.IsNullOrWhiteSpace(filePick.FilePath))
                 return;
 
             ResetState();
+            string filePath = filePick.FilePath!;
+            loadedFilePath = filePath;
 
-            loadedFilePath = result.FilePath;
-            lastUsedUartMapping = result.UartMapping;
-            lastUsedSpiMapping = result.SpiMapping;
-
-            if (!string.IsNullOrEmpty(loadedFilePath)) {
-                var fileInfo = new FileInfo(loadedFilePath);
-                navService.SetZoomLimitByFileSize(fileInfo.Length);
-            }
-
-            // připrav data pro vykreslení
-            var finalData = result.RenameMap.Count > 0
-                ? loader.SignalData.ToDictionary(
-                    kvp => result.RenameMap.TryGetValue(kvp.Key, out var newName) ? newName : kvp.Key,
-                    kvp => kvp.Value)
-                : loader.SignalData;
-
-            // vykresli
-            var progressDialog = new ProgressDialog {
+            var progressDialog = new ProgressDialog
+            {
                 Owner = this
             };
             progressDialog.Show();
+            progressDialog.SetTitle("Načítání...");
+            progressDialog.SetPhase("Načítání CSV");
+            progressDialog.ReportMessage("Načítání souboru...");
+
+            var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
+            var cts = new System.Threading.CancellationTokenSource();
+            progressDialog.OnCanceled = () => cts.Cancel();
+
+            bool loadSuccess = false;
+
+            try
+            {
+                loadSuccess = await Task.Run(() =>
+                {
+                    loader.LoadCsvFile(filePath, progress, cts.Token);
+                    if (cts.IsCancellationRequested)
+                        return false;
+                    return loader.SignalData.Count > 0;
+                }, cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // tiché ukončení
+            }
+            catch (Exception ex)
+            {
+                progressDialog.SetErrorState();
+                progressDialog.Finish($"Chyba při načítání: {ex.Message}", autoClose: false);
+                progressDialog.OnOkClicked = () => progressDialog.Close();
+                return;
+            }
+
+            if (cts.IsCancellationRequested || !loadSuccess)
+            {
+                progressDialog.Finish("Načítání bylo zrušeno nebo soubor je prázdný.", autoClose: false);
+                progressDialog.OnOkClicked = () => progressDialog.Close();
+                return;
+            }
+
             progressDialog.SetTitle("Vykreslování...");
             progressDialog.SetPhase("Vykreslování");
             progressDialog.ReportMessage("Vykreslování signálu...");
 
-            var progress = new Progress<int>(value => progressDialog.ReportProgress(value));
-            await plotter.PlotSignalsAsync(finalData, progress);
+            var fileInfo = new FileInfo(filePath);
+            navService.SetZoomLimitByFileSize(fileInfo.Length);
 
+            try {
+                await plotter.PlotSignalsAsync(loader.SignalData, progress, chunkSize: 100_000, cancellationToken: cts.Token);
+            }
+            catch (OperationCanceledException) {
+                progressDialog.Finish("Vykreslování bylo zrušeno.", autoClose: false);
+                progressDialog.OnOkClicked = () => progressDialog.Close();
+                return;
+            }
             navService.ResetView(plotter.EarliestTime);
 
             progressDialog.Finish("Vykreslování dokončeno.", autoClose: true);
@@ -425,38 +458,118 @@ namespace OscilloscopeGUI {
         /// <summary>
         /// Spusti analyzu signalu podle zvoleneho protokolu
         /// </summary>
-        private void AnalyzeButton_Click(object sender, RoutedEventArgs e) {
+private void AnalyzeButton_Click(object sender, RoutedEventArgs e) {
+    if (loader.SignalData.Count == 0) {
+        MessageBox.Show("Nejdříve načtěte data ze souboru.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+        return;
+    }
 
-            string selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "";
-            bool isManual = ManualRadio.IsChecked == true;
-            wasManualAnalysis = ManualRadio.IsChecked == true;
+    var selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+    if (string.IsNullOrEmpty(selectedProtocol)) {
+        MessageBox.Show("Musíte vybrat protokol.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+        return;
+    }
 
-            // 1 kanal jen UART, 2 kanaly UART i SPI, 3+ kanaly jen SPI
-            if (!CheckChannelCount(selectedProtocol, loader.SignalData.Count))
-                return;
+    var availableChannels = loader.GetRemainingChannelNames();
+    Dictionary<string, string> renameMap = new();
+    lastUsedUartMapping = null;
+    lastUsedSpiMapping = null;
 
-            var analyzer = protocolAnalysisService.Analyze(
-                selectedProtocol,
-                isManual,
-                loader,
-                lastUsedUartMapping,
-                ref lastUsedSpiMapping,
-                this
-            );
+    // === Výběr mapování kanálů podle protokolu ===
+    if (selectedProtocol == "UART") {
+        var uartDialog = new UartChannelMappingDialog(availableChannels) {
+            Owner = this
+        };
+        if (uartDialog.ShowDialog() != true)
+            return;
 
-            if (activeAnalyzer != null){
-            ClearPreviousAnalysis();
-            }
+        var mapping = uartDialog.ChannelRenames;
+        lastUsedUartMapping = new UartChannelMapping {
+            Tx = mapping.FirstOrDefault(kv => kv.Value == "TX").Key ?? "",
+            Rx = mapping.FirstOrDefault(kv => kv.Value == "RX").Key ?? ""
+        };
 
-            if (analyzer != null)
-            {
-                analyzer.Analyze();
-                SetAnalyzer(analyzer);
-                UpdateStatistics();
-                UpdateAnnotations();
-                MessageBox.Show($"{analyzer.ProtocolName} analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
+        if (!lastUsedUartMapping.IsValid()) {
+            MessageBox.Show("Mapování UART signálů není validní (TX a RX musí být různé a neprázdné).", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
         }
+
+        renameMap = mapping;
+    } else if (selectedProtocol == "SPI") {
+        var spiDialog = new SpiChannelMappingDialog(availableChannels) {
+            Owner = this
+        };
+        if (spiDialog.ShowDialog() != true)
+            return;
+
+        lastUsedSpiMapping = spiDialog.Mapping;
+        renameMap = new Dictionary<string, string> {
+            { lastUsedSpiMapping.ChipSelect, "CS" },
+            { lastUsedSpiMapping.Clock, "SCLK" },
+            { lastUsedSpiMapping.Mosi, "MOSI" }
+        };
+        if (!string.IsNullOrEmpty(lastUsedSpiMapping.Miso)) {
+            renameMap[lastUsedSpiMapping.Miso] = "MISO";
+        }
+    }
+
+            // === Přemapování názvů v SignalData + grafu ===
+            if (renameMap.Count > 0)
+            {
+                var remapped = loader.SignalData.ToDictionary(
+                    kvp => renameMap.TryGetValue(kvp.Key, out var newName) ? newName : kvp.Key,
+                    kvp => kvp.Value
+                );
+
+                loader.ClearSignalData(); // ← veřejná metoda, která smaže a znovu naplní data
+                foreach (var kvp in remapped)
+                    loader.AddSignalData(kvp.Key, kvp.Value);
+
+                plotter.RenameChannels(renameMap); // aktualizace legendy
+
+                if (selectedProtocol == "SPI" && lastUsedSpiMapping != null) {
+                    //aktualizace mapingu
+                    foreach (var kv in renameMap) {
+                        if (lastUsedSpiMapping.Clock == kv.Key)
+                            lastUsedSpiMapping.Clock = kv.Value;
+                        if (lastUsedSpiMapping.Mosi == kv.Key)
+                            lastUsedSpiMapping.Mosi = kv.Value;
+                        if (lastUsedSpiMapping.Miso == kv.Key)
+                            lastUsedSpiMapping.Miso = kv.Value;
+                        if (lastUsedSpiMapping.ChipSelect == kv.Key)
+                            lastUsedSpiMapping.ChipSelect = kv.Value;
+                    }
+                }
+            }
+
+    // === Spuštění analýzy ===
+    bool isManual = ManualRadio.IsChecked == true;
+    wasManualAnalysis = isManual;
+
+    if (!CheckChannelCount(selectedProtocol, loader.SignalData.Count))
+        return;
+
+    if (activeAnalyzer != null)
+        ClearPreviousAnalysis();
+
+    var analyzer = protocolAnalysisService.Analyze(
+        selectedProtocol,
+        isManual,
+        loader,
+        lastUsedUartMapping,
+        ref lastUsedSpiMapping,
+        this
+    );
+
+    if (analyzer != null) {
+        analyzer.Analyze();
+        SetAnalyzer(analyzer);
+        UpdateStatistics();
+        UpdateAnnotations();
+        MessageBox.Show($"{analyzer.ProtocolName} analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+}
+
 
         /// <summary>
         /// Aplikuje filtr na dekodovana data podle chyby (UART nebo SPI). Obnovi hledani a anotace

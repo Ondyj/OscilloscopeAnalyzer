@@ -20,7 +20,12 @@ namespace OscilloscopeGUI.Plotting {
         /// Asynchronne vykresli vsechny signaly v datasetu do grafu po davkach
         /// </summary>
         /// <param name="signalData">Data se signaly rozdelena podle nazvu kanalu</param>
-        public async Task PlotSignalsAsync(Dictionary<string, List<(double Time, double Value)>> signalData, IProgress<int>? progress = null, int chunkSize = 100_000) {
+       public async Task PlotSignalsAsync(
+            Dictionary<string, List<(double Time, double Value)>> signalData,
+            IProgress<int>? progress = null,
+            int chunkSize = 100_000,
+            CancellationToken cancellationToken = default) 
+        {
             await Task.Run(async () => {
                 plot.Dispatcher.Invoke(() => plot.Plot.Clear());
 
@@ -38,6 +43,8 @@ namespace OscilloscopeGUI.Plotting {
                 int currentChannel = 0;
 
                 foreach (var channel in signalData) {
+                    cancellationToken.ThrowIfCancellationRequested(); // cancel
+
                     string channelName = channel.Key;
                     double[] rawTimes = channel.Value.Select(v => v.Time).ToArray();
                     double[] rawVoltages = channel.Value.Select(v => v.Value).ToArray();
@@ -50,11 +57,12 @@ namespace OscilloscopeGUI.Plotting {
                     var simplified = SimplifyToEdges(times, values);
 
                     var channelColor = palette.GetColor(currentChannel);
-
                     int totalChunks = (int)Math.Ceiling((double)simplified.times.Length / chunkSize);
                     int processedChunks = 0;
 
                     for (int i = 0; i < simplified.times.Length; i += chunkSize) {
+                        cancellationToken.ThrowIfCancellationRequested(); // cancel
+
                         int count = Math.Min(chunkSize, simplified.times.Length - i);
                         double[] chunkTimes = simplified.times.Skip(i).Take(count).ToArray();
                         double[] chunkValues = simplified.values.Skip(i).Take(count).ToArray();
@@ -93,7 +101,7 @@ namespace OscilloscopeGUI.Plotting {
                     plot.Plot.ShowLegend();
                     plot.Refresh();
                 });
-            });
+            }, cancellationToken);
         }
 
         /// <summary>
