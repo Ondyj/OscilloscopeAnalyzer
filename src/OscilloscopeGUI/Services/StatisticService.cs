@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Controls;
 using System.IO;
+using System.Windows;
 
 namespace OscilloscopeGUI.Services {
     public class StatisticsService {
@@ -14,6 +15,11 @@ namespace OscilloscopeGUI.Services {
         private readonly TextBlock StatsSpiTransfers;
         private readonly TextBlock StatsMosiMiso;
         private readonly TextBlock StatsAnalysisMode;
+        private readonly TextBlock StatsUartTransfers;
+        private readonly TextBlock StatsUartAvgGap;
+        private readonly TextBlock StatsUartMinMaxGap;
+        private readonly StackPanel StatsPanelLeft;
+        private readonly StackPanel StatsPanelRight;
 
         public StatisticsService(
             TextBlock statsTotalBytes,
@@ -23,7 +29,12 @@ namespace OscilloscopeGUI.Services {
             TextBlock statsMinMaxDuration,
             TextBlock statsSpiTransfers,
             TextBlock statsMosiMiso,
-            TextBlock statsAnalysisMode)
+            TextBlock statsAnalysisMode,
+            TextBlock statsUartTransfers,
+            TextBlock statsUartAvgGap,
+            TextBlock statsUartMinMaxGap,
+            StackPanel statsPanelLeft,
+            StackPanel statsPanelRight)
         {
             StatsTotalBytes = statsTotalBytes;
             StatsErrors = statsErrors;
@@ -33,6 +44,11 @@ namespace OscilloscopeGUI.Services {
             StatsSpiTransfers = statsSpiTransfers;
             StatsMosiMiso = statsMosiMiso;
             StatsAnalysisMode = statsAnalysisMode;
+            StatsUartTransfers = statsUartTransfers;
+            StatsUartAvgGap = statsUartAvgGap;
+            StatsUartMinMaxGap = statsUartMinMaxGap;
+            StatsPanelLeft = statsPanelLeft;
+            StatsPanelRight = statsPanelRight;
         }
 
         public void UpdateUartStats(UartProtocolAnalyzer uart) {
@@ -41,16 +57,15 @@ namespace OscilloscopeGUI.Services {
             StatsAvgDuration.Text = $"Průměrná délka bajtu: {uart.AvgDurationUs:F1} µs";
             StatsBaudRate.Text = $"Odhad: {uart.EstimatedBaudRate:F0} baud | délka bitu: {uart.EstimatedBitTimeUs:F2} µs";
             StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {uart.MinDurationUs:F1} / {uart.MaxDurationUs:F1} µs";
+            StatsUartTransfers.Text = $"Počet přenosů: {uart.TransferCount}";
+            StatsUartAvgGap.Text = $"Průměrná mezera: {uart.AvgGapUs:F1} µs";
+            StatsUartMinMaxGap.Text = $"Mezera (min/max): {uart.MinGapUs:F1} / {uart.MaxGapUs:F1} µs";
 
-            StatsSpiTransfers.Visibility = System.Windows.Visibility.Collapsed;
-            StatsMosiMiso.Visibility = System.Windows.Visibility.Collapsed;
+            StatsPanelLeft.Visibility = Visibility.Visible;
+            StatsPanelRight.Visibility = Visibility.Visible;
 
-            StatsTotalBytes.Visibility = System.Windows.Visibility.Visible;
-            StatsErrors.Visibility = System.Windows.Visibility.Visible;
-            StatsAvgDuration.Visibility = System.Windows.Visibility.Visible;
-            StatsBaudRate.Visibility = System.Windows.Visibility.Visible;
-            StatsMinMaxDuration.Visibility = System.Windows.Visibility.Visible;
-
+            StatsSpiTransfers.Visibility = Visibility.Collapsed;
+            StatsMosiMiso.Visibility = Visibility.Collapsed;
         }
 
         public void UpdateSpiStats(SpiProtocolAnalyzer spi) {
@@ -62,13 +77,13 @@ namespace OscilloscopeGUI.Services {
             StatsSpiTransfers.Text = $"Počet přenosů{(spi.HasChipSelect ? " (CS aktivní)" : " (bez CS)")} : {spi.TransferCount}";
             StatsMosiMiso.Text = $"Bajty MOSI / MISO: {spi.TotalBytes - spi.MisoByteCount} / {spi.MisoByteCount}";
 
-            StatsSpiTransfers.Visibility = System.Windows.Visibility.Visible;
-            StatsMosiMiso.Visibility = System.Windows.Visibility.Visible;
-            StatsTotalBytes.Visibility = System.Windows.Visibility.Visible;
-            StatsErrors.Visibility = System.Windows.Visibility.Visible;
-            StatsAvgDuration.Visibility = System.Windows.Visibility.Visible;
-            StatsBaudRate.Visibility = System.Windows.Visibility.Visible;
-            StatsMinMaxDuration.Visibility = System.Windows.Visibility.Visible;
+            StatsSpiTransfers.Visibility = Visibility.Visible;
+            StatsMosiMiso.Visibility = Visibility.Visible;
+            StatsTotalBytes.Visibility = Visibility.Visible;
+            StatsErrors.Visibility = Visibility.Visible;
+            StatsAvgDuration.Visibility = Visibility.Visible;
+            StatsBaudRate.Visibility = Visibility.Visible;
+            StatsMinMaxDuration.Visibility = Visibility.Visible;
         }
 
         public void Reset() {
@@ -80,6 +95,8 @@ namespace OscilloscopeGUI.Services {
             StatsSpiTransfers.Text = "Počet SPI přenosů (CS aktivní): –";
             StatsMosiMiso.Text = "Bajty MOSI / MISO: –";
             StatsAnalysisMode.Text = "Režim analýzy: –";
+            StatsPanelLeft.Visibility = Visibility.Collapsed;
+            StatsPanelRight.Visibility = Visibility.Collapsed;
         }
     }
 }

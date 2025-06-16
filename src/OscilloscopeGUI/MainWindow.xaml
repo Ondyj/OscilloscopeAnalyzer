@@ -89,7 +89,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Levy sloupec statistik -->
-                <StackPanel Grid.Column="0">
+                <StackPanel Grid.Column="0" x:Name="StatsPanelLeft" Visibility="Collapsed">
                     <TextBlock x:Name="StatsTotalBytes" Text="Celkový počet bajtů: -" Margin="10,0" FontWeight="Bold"/>
                     <TextBlock x:Name="StatsErrors" Text="Počet bajtů s chybou: -" Margin="10,0"/>
                     <TextBlock x:Name="StatsAvgDuration" Text="Průměrná délka bajtu: -" Margin="10,0"/>
@@ -97,11 +97,14 @@
                 </StackPanel>
 
                 <!-- Pravy sloupec statistik -->
-                <StackPanel Grid.Column="1">
+                <StackPanel Grid.Column="1" x:Name="StatsPanelRight" Visibility="Collapsed">
                     <TextBlock x:Name="StatsAnalysisMode" Text="Režim analýzy: –" Margin="10,0"/>
                     <TextBlock x:Name="StatsMinMaxDuration" Text="Délka bajtu (min/max): -" Margin="10,0"/>
                     <TextBlock x:Name="StatsSpiTransfers" Text="Počet SPI přenosů (CS aktivní): -" Margin="10,0"/>
                     <TextBlock x:Name="StatsMosiMiso" Text="Bajty MOSI / MISO: -" Margin="10,0"/>
+                    <TextBlock x:Name="StatsUartTransfers" Text="Počet přenosů: -" Margin="10,0"/>
+                    <TextBlock x:Name="StatsUartAvgGap" Text="Průměrná mezera: -" Margin="10,0"/>
+                    <TextBlock x:Name="StatsUartMinMaxGap" Text="Mezera (min/max): -" Margin="10,0"/>
                 </StackPanel>
             </Grid>
         </Grid>

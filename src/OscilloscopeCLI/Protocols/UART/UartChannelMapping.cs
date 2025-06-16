@@ -7,10 +7,11 @@ namespace OscilloscopeCLI.Protocols {
         public string Rx { get; set; } = ""; // Vstupni signal (receive)
 
         public bool IsValid() {
-            // Vraci true, pokud jsou obe role nastaveny a nejsou shodne
-            return !string.IsNullOrEmpty(Tx) &&
-                   !string.IsNullOrEmpty(Rx) &&
-                   Tx != Rx;
+            if (!string.IsNullOrEmpty(Tx) && !string.IsNullOrEmpty(Rx))
+                return Tx != Rx; // obe ruzne OK
+            if (!string.IsNullOrEmpty(Tx) || !string.IsNullOrEmpty(Rx))
+                return true; // aspon jedna OK
+            return false; // zadna prirazena
         }
     }
 }

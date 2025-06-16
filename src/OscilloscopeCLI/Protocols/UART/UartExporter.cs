@@ -37,6 +37,9 @@ public class UartExporter {
             writer.WriteLine($"# Délka bajtu (min/max): {analyzer.MinDurationUs:F1} / {analyzer.MaxDurationUs:F1} µs");
             writer.WriteLine($"# Odhadovaná rychlost: {analyzer.EstimatedBaudRate:F0} baud");
             writer.WriteLine($"# Odhadovaná délka bitu: {analyzer.EstimatedBitTimeUs:F2} µs");
+            writer.WriteLine($"# Počet přenosů: {analyzer.TransferCount}");
+            writer.WriteLine($"# Průměrná mezera mezi bajty: {analyzer.AvgGapUs:F1} µs");
+            writer.WriteLine($"# Mezera mezi bajty (min/max): {analyzer.MinGapUs:F1} / {analyzer.MaxGapUs:F1} µs");
             writer.WriteLine(); 
         }
 

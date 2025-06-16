@@ -24,6 +24,10 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
     public double MaxDurationUs { get; private set; }
     public double EstimatedBaudRate { get; private set; }
     public double EstimatedBitTimeUs { get; private set; }
+    public int TransferCount { get; private set; }
+    public double AvgGapUs { get; private set; }
+    public double MinGapUs { get; private set; }
+    public double MaxGapUs { get; private set; }
     
 
     /// <summary>
@@ -73,9 +77,27 @@ public class UartProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExp
         MinDurationUs = TotalBytes > 0 ? DecodedBytes.Min(b => (b.EndTime - b.StartTime) * 1e6) : 0;
         MaxDurationUs = TotalBytes > 0 ? DecodedBytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
 
-        double bitsPerByte = settings.DataBits + 1 + (settings.Parity == Parity.None ? 0 : 1) + settings.StopBits;
-        EstimatedBaudRate = AvgDurationUs > 0 ? (bitsPerByte * 1_000_000.0 / AvgDurationUs) : 0;
-        EstimatedBitTimeUs = EstimatedBaudRate > 0 ? (1_000_000.0 / EstimatedBaudRate) : 0;
+        EstimatedBaudRate = settings.BaudRate;
+        EstimatedBitTimeUs = 1_000_000.0 / settings.BaudRate;
+
+        // Pocet prenosu = pocet dekodovanych bitu
+        TransferCount = DecodedBytes.Count;
+
+        if (DecodedBytes.Count >= 2) {
+            var gaps = new List<double>();
+            for (int i = 1; i < DecodedBytes.Count; i++) {
+                double gap = (DecodedBytes[i].StartTime - DecodedBytes[i - 1].EndTime) * 1e6; // µs
+                gaps.Add(gap);
+            }
+
+            AvgGapUs = gaps.Average();
+            MinGapUs = gaps.Min();
+            MaxGapUs = gaps.Max();
+        } else {
+            AvgGapUs = 0;
+            MinGapUs = 0;
+            MaxGapUs = 0;
+        }
 
         matchSearcher = new UartMatchSearcher(DecodedBytes);
         exporter = new UartExporter(DecodedBytes, channelRenameMap, this);

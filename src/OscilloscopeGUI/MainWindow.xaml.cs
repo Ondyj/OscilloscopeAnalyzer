@@ -77,7 +77,12 @@ namespace OscilloscopeGUI {
                 StatsMinMaxDuration,
                 StatsSpiTransfers,
                 StatsMosiMiso,
-                StatsAnalysisMode
+                StatsAnalysisMode,
+                StatsUartTransfers,
+                StatsUartAvgGap,
+                StatsUartMinMaxGap,
+                StatsPanelLeft,
+                StatsPanelRight
             );
         }
 
