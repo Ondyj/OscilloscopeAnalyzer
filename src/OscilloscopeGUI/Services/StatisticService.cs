@@ -20,6 +20,8 @@ namespace OscilloscopeGUI.Services {
         private readonly TextBlock StatsUartMinMaxGap;
         private readonly StackPanel StatsPanelLeft;
         private readonly StackPanel StatsPanelRight;
+        private readonly TextBlock StatsSpiCsGap;
+        private readonly TextBlock StatsSpiEdgeDelay;
 
         public StatisticsService(
             TextBlock statsTotalBytes,
@@ -34,7 +36,10 @@ namespace OscilloscopeGUI.Services {
             TextBlock statsUartAvgGap,
             TextBlock statsUartMinMaxGap,
             StackPanel statsPanelLeft,
-            StackPanel statsPanelRight)
+            StackPanel statsPanelRight,
+            TextBlock statsSpiCsGap,
+            TextBlock statsSpiEdgeDelay
+            )
         {
             StatsTotalBytes = statsTotalBytes;
             StatsErrors = statsErrors;
@@ -49,6 +54,8 @@ namespace OscilloscopeGUI.Services {
             StatsUartMinMaxGap = statsUartMinMaxGap;
             StatsPanelLeft = statsPanelLeft;
             StatsPanelRight = statsPanelRight;
+            StatsSpiCsGap = statsSpiCsGap;
+            StatsSpiEdgeDelay = statsSpiEdgeDelay;
         }
 
         public void UpdateUartStats(UartProtocolAnalyzer uart) {
@@ -64,8 +71,14 @@ namespace OscilloscopeGUI.Services {
             StatsPanelLeft.Visibility = Visibility.Visible;
             StatsPanelRight.Visibility = Visibility.Visible;
 
+            StatsUartTransfers.Visibility = Visibility.Visible;
+            StatsUartAvgGap.Visibility = Visibility.Visible;
+            StatsUartMinMaxGap.Visibility = Visibility.Visible;
+
             StatsSpiTransfers.Visibility = Visibility.Collapsed;
             StatsMosiMiso.Visibility = Visibility.Collapsed;
+            StatsSpiCsGap.Visibility = Visibility.Collapsed;
+            StatsSpiEdgeDelay.Visibility = Visibility.Collapsed;
         }
 
         public void UpdateSpiStats(SpiProtocolAnalyzer spi) {
@@ -77,13 +90,25 @@ namespace OscilloscopeGUI.Services {
             StatsSpiTransfers.Text = $"Počet přenosů{(spi.HasChipSelect ? " (CS aktivní)" : " (bez CS)")} : {spi.TransferCount}";
             StatsMosiMiso.Text = $"Bajty MOSI / MISO: {spi.TotalBytes - spi.MisoByteCount} / {spi.MisoByteCount}";
 
+            if (spi.HasChipSelect) {
+                StatsSpiCsGap.Text = $"Průměrná mezera mezi CS: {spi.AvgCsGapUs:F1} µs";
+                StatsSpiEdgeDelay.Text = $"Zpoždění první hrany hodin: {spi.AvgDelayToFirstEdgeUs:F1} µs";
+            } else {
+                StatsSpiCsGap.Text = "Průměrná mezera mezi CS: (bez CS)";
+                StatsSpiEdgeDelay.Text = "Zpoždění první hrany hodin: (bez CS)";
+            }
+
+            StatsPanelLeft.Visibility = Visibility.Visible;
+            StatsPanelRight.Visibility = Visibility.Visible;
+
             StatsSpiTransfers.Visibility = Visibility.Visible;
             StatsMosiMiso.Visibility = Visibility.Visible;
-            StatsTotalBytes.Visibility = Visibility.Visible;
-            StatsErrors.Visibility = Visibility.Visible;
-            StatsAvgDuration.Visibility = Visibility.Visible;
-            StatsBaudRate.Visibility = Visibility.Visible;
-            StatsMinMaxDuration.Visibility = Visibility.Visible;
+            StatsSpiCsGap.Visibility = Visibility.Visible;
+            StatsSpiEdgeDelay.Visibility = Visibility.Visible;
+
+            StatsUartTransfers.Visibility = Visibility.Collapsed;
+            StatsUartAvgGap.Visibility = Visibility.Collapsed;
+            StatsUartMinMaxGap.Visibility = Visibility.Collapsed;
         }
 
         public void Reset() {
@@ -95,6 +120,8 @@ namespace OscilloscopeGUI.Services {
             StatsSpiTransfers.Text = "Počet SPI přenosů (CS aktivní): –";
             StatsMosiMiso.Text = "Bajty MOSI / MISO: –";
             StatsAnalysisMode.Text = "Režim analýzy: –";
+            StatsSpiCsGap.Text = "Průměrná mezera mezi CS: –";
+            StatsSpiEdgeDelay.Text = "Zpoždění první hrany hodin: –";
             StatsPanelLeft.Visibility = Visibility.Collapsed;
             StatsPanelRight.Visibility = Visibility.Collapsed;
         }

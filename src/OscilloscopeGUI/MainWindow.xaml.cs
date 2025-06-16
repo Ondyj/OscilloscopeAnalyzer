@@ -63,7 +63,7 @@ namespace OscilloscopeGUI {
         /// Konstruktor hlavniho okna aplikace
         /// </summary>
         public MainWindow() {
-            AllocConsole();
+            //AllocConsole();
 
             InitializeComponent();
             InitializePlot();
@@ -82,7 +82,9 @@ namespace OscilloscopeGUI {
                 StatsUartAvgGap,
                 StatsUartMinMaxGap,
                 StatsPanelLeft,
-                StatsPanelRight
+                StatsPanelRight,
+                StatsSpiCsGap,
+                StatsSpiEdgeDelay
             );
         }
 

@@ -31,6 +31,13 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     public double EstimatedBitRate { get; private set; }
     public double EstimatedBitTimeUs { get; private set; }
     public int MisoByteCount { get; private set; }
+    public double MinCsGapUs { get; private set; }
+    public double MaxCsGapUs { get; private set; }
+    public double AvgDelayToFirstEdgeUs { get; private set; }
+    public double MinDelayToFirstEdgeUs { get; private set; }
+    public double MaxDelayToFirstEdgeUs { get; private set; }
+    public double AvgCsGapUs { get; private set; } = 0.0;
+    public double AvgEdgeDelayUs { get; private set; } = 0.0;
 
     /// <summary>
     /// Vytvori novou instanci analyzatoru SPI protokolu.
@@ -38,7 +45,8 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     /// <param name="signalData">Vstupni signalova data ve formatu: kanal -> seznam (cas, hodnota).</param>
     /// <param name="settings">Nastaveni parametru SPI komunikace (CPOL, CPHA, BitsPerWord).</param>
     /// <param name="mapping">Mapovani fyzickych kanalu na funkce protokolu (CS, SCLK, MOSI, MISO).</param>
-    public SpiProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, SpiSettings settings, SpiChannelMapping mapping) {
+    public SpiProtocolAnalyzer(Dictionary<string, List<(double Time, double Value)>> signalData, SpiSettings settings, SpiChannelMapping mapping)
+    {
         this.signalData = signalData;
         this.settings = settings;
         this.mapping = mapping;
@@ -67,8 +75,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         if (hasMiso)
             misoAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Miso!);
 
-
-        // Detekce hran SCLK
+        // Detekuj pouze relevantní hrany dle CPOL/CPHA
         var sclkEdges = sclkAnalyzer.DetectTransitions().Where(t => {
             if (!settings.Cpha)
                 return settings.Cpol ? t.From == 1 && t.To == 0 : t.From == 0 && t.To == 1;
@@ -76,46 +83,52 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
                 return settings.Cpol ? t.From == 0 && t.To == 1 : t.From == 1 && t.To == 0;
         }).ToList();
 
+        // Získání CS přenosových oken
         List<(double StartTime, double EndTime)> transferWindows;
-
         if (csAnalyzer != null) {
-            // Pouzij CS LOW jako prenosove okno
             transferWindows = csAnalyzer.GetConstantLevelSegments().Where(seg => seg.Value == 0)
                 .Select(seg => (seg.StartTime, seg.EndTime)).ToList();
         } else {
-            // Bez CS – cely rozsah jako jedno prenosove okno
             double start = signalData[mapping.Clock].First().Time;
             double end = signalData[mapping.Clock].Last().Time;
             transferWindows = new() { (start, end) };
         }
 
-
-        // Dekodovani dat
         int edgeIndex = 0;
         var mosiReader = new SignalReader(mosiAnalyzer.GetSamples());
         SignalReader? misoReader = hasMiso && misoAnalyzer != null ? new SignalReader(misoAnalyzer.GetSamples()) : null;
 
-        foreach (var (startTime, endTime) in transferWindows) {
-            var edges = new List<DigitalTransition>();
+        List<double> delaysToFirstEdge = new();
+        List<double> csGaps = new();
+        double? lastCsEnd = null;
 
+        foreach (var (startTime, endTime) in transferWindows) {
+            if (lastCsEnd.HasValue) {
+                double gap = startTime - lastCsEnd.Value;
+                if (gap > 0)
+                    csGaps.Add(gap);
+            }
+            lastCsEnd = endTime;
+
+            var edges = new List<DigitalTransition>();
             while (edgeIndex < sclkEdges.Count && sclkEdges[edgeIndex].Time < startTime)
                 edgeIndex++;
+            while (edgeIndex < sclkEdges.Count && sclkEdges[edgeIndex].Time <= endTime)
+                edges.Add(sclkEdges[edgeIndex++]);
 
-            while (edgeIndex < sclkEdges.Count && sclkEdges[edgeIndex].Time <= endTime) {
-                edges.Add(sclkEdges[edgeIndex]);
-                edgeIndex++;
+            if (edges.Count > 0) {
+                double delay = edges.First().Time - startTime;
+                if (delay >= 0)
+                    delaysToFirstEdge.Add(delay);
             }
 
             AnalyzeTransfer(edges, mosiReader, misoReader, startTime, endTime);
         }
-        TransferCount = transferWindows.Count;
-        if (transferWindows.Count > 0) {
-            AvgTransferDurationUs = transferWindows.Average(t => (t.EndTime - t.StartTime) * 1e6);
-        } else {
-            AvgTransferDurationUs = 0.0;
-        }
 
-        // statistiky
+        // Obecné statistiky
+        TransferCount = transferWindows.Count;
+        AvgTransferDurationUs = transferWindows.Count > 0 ? transferWindows.Average(t => (t.EndTime - t.StartTime) * 1e6) : 0.0;
+
         TotalBytes = DecodedBytes.Count;
         ErrorCount = DecodedBytes.Count(b => !string.IsNullOrEmpty(b.Error));
         AvgDurationUs = TotalBytes > 0 ? DecodedBytes.Average(b => (b.EndTime - b.StartTime) * 1e6) : 0;
@@ -124,7 +137,18 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         EstimatedBitTimeUs = AvgDurationUs > 0 ? (AvgDurationUs / 8.0) : 0;
         EstimatedBitRate = EstimatedBitTimeUs > 0 ? (1_000_000.0 / EstimatedBitTimeUs) : 0;
         MisoByteCount = DecodedBytes.Count(b => b.HasMISO);
+
+        // Statistiky mezer mezi CS
+        AvgCsGapUs = csGaps.Count > 0 ? csGaps.Average() * 1e6 : 0.0;
+        MinCsGapUs = csGaps.Count > 0 ? csGaps.Min() * 1e6 : 0.0;
+        MaxCsGapUs = csGaps.Count > 0 ? csGaps.Max() * 1e6 : 0.0;
+
+        // Statistiky zpozdeni prvni hrany
+        AvgDelayToFirstEdgeUs = delaysToFirstEdge.Count > 0 ? delaysToFirstEdge.Average() * 1e6 : 0.0;
+        MinDelayToFirstEdgeUs = delaysToFirstEdge.Count > 0 ? delaysToFirstEdge.Min() * 1e6 : 0.0;
+        MaxDelayToFirstEdgeUs = delaysToFirstEdge.Count > 0 ? delaysToFirstEdge.Max() * 1e6 : 0.0;
     }
+
     private static Dictionary<string, List<Tuple<double, double>>> ConvertToTuple(Dictionary<string, List<(double Time, double Value)>> source) {
         return source.ToDictionary(
             kv => kv.Key,
@@ -207,7 +231,6 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
             });
         }
     }
-
 
     /// <summary>
     /// Prevede seznam bitu (LSB first) na bajt.

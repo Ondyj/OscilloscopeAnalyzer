@@ -35,15 +35,15 @@ namespace OscilloscopeCLI.Protocols {
                     .Select(s => (s.StartTime, s.EndTime))
                     .ToList();
 
-                Console.WriteLine($"[SPI][Inference] Nalezeno {activeWindows.Count} aktivních CS segmentů.");
-                foreach (var s in activeWindows)
-                    Console.WriteLine($"[SPI][CS] Aktivní od {s.StartTime:F9}s do {s.EndTime:F9}s");
+                //Console.WriteLine($"[SPI][Inference] Nalezeno {activeWindows.Count} aktivních CS segmentů.");
+                //foreach (var s in activeWindows)
+                    //Console.WriteLine($"[SPI][CS] Aktivní od {s.StartTime:F9}s do {s.EndTime:F9}s");
             }
             else
             {
                 double start = sclkSamples.First().Timestamp;
                 double end = sclkSamples.Last().Timestamp;
-                Console.WriteLine("[SPI][Inference] Žádný CS – používám celý rozsah signálu.");
+                //Console.WriteLine("[SPI][Inference] Žádný CS – používám celý rozsah signálu.");
                 activeWindows = new() { (start, end) };
             }
 
@@ -75,10 +75,10 @@ namespace OscilloscopeCLI.Protocols {
                 int bitsInThisWindow = EstimateBitsPerTransfer(edgesInWindow);
                 bitsPerTransfer.Add(bitsInThisWindow);
 
-                Console.WriteLine($"[SPI][Window] {window.StartTime:F6}s - {window.EndTime:F6}s");
-                Console.WriteLine($"  - Hran: {edgesInWindow.Count}");
-                Console.WriteLine($"  - CPOL: {(firstState ? "HIGH" : "LOW")}");
-                Console.WriteLine($"  - Pozice první hrany: {position:P1} → CPHA: {(cphaEstimate ? "1" : "0")}");
+                //Console.WriteLine($"[SPI][Window] {window.StartTime:F6}s - {window.EndTime:F6}s");
+                //Console.WriteLine($"  - Hran: {edgesInWindow.Count}");
+                //Console.WriteLine($"  - CPOL: {(firstState ? "HIGH" : "LOW")}");
+                //Console.WriteLine($"  - Pozice první hrany: {position:P1} → CPHA: {(cphaEstimate ? "1" : "0")}");
             }
 
             // Fallback pro pripad, ze zadne validni okno nebylo nalezeno
@@ -89,8 +89,8 @@ namespace OscilloscopeCLI.Protocols {
                 bool fallbackCpol = sclkSamples.First().State;
                 int fallbackBits = allEdges.Count;
 
-                Console.WriteLine("[SPI][Warning] Žádná validní přenosová okna – fallback režim.");
-                Console.WriteLine($"[SPI][Fallback] Hran: {fallbackBits}, CPOL: {(fallbackCpol ? "1" : "0")}");
+                //Console.WriteLine("[SPI][Warning] Žádná validní přenosová okna – fallback režim.");
+                //Console.WriteLine($"[SPI][Fallback] Hran: {fallbackBits}, CPOL: {(fallbackCpol ? "1" : "0")}");
 
                 return new SpiSettings
                 {
@@ -104,9 +104,9 @@ namespace OscilloscopeCLI.Protocols {
             bool finalCpha = cphaEstimates.Count(v => v) > cphaEstimates.Count / 2.0;
             int bitsPerWordEstimate = (int)Math.Round(bitsPerTransfer.Average());
 
-            Console.WriteLine($"[SPI][Inference] Finální CPOL: {(finalCpol ? "1 (HIGH)" : "0 (LOW)")}");
-            Console.WriteLine($"[SPI][Inference] Finální CPHA: {(finalCpha ? "1" : "0")}");
-            Console.WriteLine($"[SPI][Inference] Průměrný počet hran (bitů): {bitsPerWordEstimate}");
+            //Console.WriteLine($"[SPI][Inference] Finální CPOL: {(finalCpol ? "1 (HIGH)" : "0 (LOW)")}");
+            //Console.WriteLine($"[SPI][Inference] Finální CPHA: {(finalCpha ? "1" : "0")}");
+            //Console.WriteLine($"[SPI][Inference] Průměrný počet hran (bitů): {bitsPerWordEstimate}");
 
             return new SpiSettings
             {

@@ -94,6 +94,7 @@
                     <TextBlock x:Name="StatsErrors" Text="Počet bajtů s chybou: -" Margin="10,0"/>
                     <TextBlock x:Name="StatsAvgDuration" Text="Průměrná délka bajtu: -" Margin="10,0"/>
                     <TextBlock x:Name="StatsBaudRate" Text="Odhadovaná rychlost (baud): -" Margin="10,0"/>
+                    <TextBlock x:Name="StatsSpiCsGap" Text="Průměrná mezera mezi CS: -" Margin="10,0"/>
                 </StackPanel>
 
                 <!-- Pravy sloupec statistik -->
@@ -105,6 +106,7 @@
                     <TextBlock x:Name="StatsUartTransfers" Text="Počet přenosů: -" Margin="10,0"/>
                     <TextBlock x:Name="StatsUartAvgGap" Text="Průměrná mezera: -" Margin="10,0"/>
                     <TextBlock x:Name="StatsUartMinMaxGap" Text="Mezera (min/max): -" Margin="10,0"/>
+                    <TextBlock x:Name="StatsSpiEdgeDelay" Text="Zpoždění první hrany SCLK: -" Margin="10,0"/>
                 </StackPanel>
             </Grid>
         </Grid>
