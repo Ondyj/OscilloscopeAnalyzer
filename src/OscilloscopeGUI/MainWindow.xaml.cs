@@ -328,8 +328,7 @@ private void UpdateAnnotations() {
         /// <summary>
         /// Nacte CSV soubor, vykresli signal a provede mapovani kanalu podle zvoleneho protokolu
         /// </summary>
-        private async void LoadCsv_Click(object sender, RoutedEventArgs e)
-        {
+        private async void LoadCsv_Click(object sender, RoutedEventArgs e) {
             var filePick = fileLoadingService.PromptForFileOnly(this);
             if (!filePick.Success || string.IsNullOrWhiteSpace(filePick.FilePath))
                 return;
@@ -365,7 +364,7 @@ private void UpdateAnnotations() {
             }
             catch (OperationCanceledException)
             {
-                // tiché ukončení
+                // ukonceni
             }
             catch (Exception ex)
             {
@@ -455,137 +454,151 @@ private void UpdateAnnotations() {
         /// <summary>
         /// Spusti analyzu signalu podle zvoleneho protokolu
         /// </summary>
-private void AnalyzeButton_Click(object sender, RoutedEventArgs e) {
-    if (loader.SignalData.Count == 0) {
-        MessageBox.Show("Nejdříve načtěte data ze souboru.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
-        return;
-    }
+        private void AnalyzeButton_Click(object sender, RoutedEventArgs e) {
+            if (loader.SignalData.Count == 0) {
+                MessageBox.Show("Nejdříve načtěte data ze souboru.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
-    var selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
-    if (string.IsNullOrEmpty(selectedProtocol)) {
-        MessageBox.Show("Musíte vybrat protokol.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
-        return;
-    }
+            var selectedProtocol = (ProtocolComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString();
+            if (string.IsNullOrEmpty(selectedProtocol)) {
+                MessageBox.Show("Musíte vybrat protokol.", "Chyba", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
-    var availableChannels = loader.GetRemainingChannelNames();
-    Dictionary<string, string> renameMap = new();
-    lastUsedUartMapping = null;
-    lastUsedSpiMapping = null;
+            var availableChannels = loader.GetRemainingChannelNames();
+            Dictionary<string, string> renameMap = new();
+            lastUsedUartMapping = null;
+            lastUsedSpiMapping = null;
 
-    channelOffsets = new();
+            channelOffsets = new();
 
-    // === Mapování kanálů ===
-    if (selectedProtocol == "UART") {
-        var uartDialog = new UartChannelMappingDialog(availableChannels) { Owner = this };
-        if (uartDialog.ShowDialog() != true)
-            return;
+            // === Mapovani kanalu ===
+            if (selectedProtocol == "UART")
+            {
+                var uartDialog = new UartChannelMappingDialog(availableChannels) { Owner = this };
+                if (uartDialog.ShowDialog() != true)
+                    return;
 
-        var mapping = uartDialog.ChannelRenames;
-        lastUsedUartMapping = new UartChannelMapping {
-            Tx = mapping.FirstOrDefault(kv => kv.Value == "TX").Key ?? "",
-            Rx = mapping.FirstOrDefault(kv => kv.Value == "RX").Key ?? ""
-        };
+                var mapping = uartDialog.ChannelRenames;
+                lastUsedUartMapping = new UartChannelMapping
+                {
+                    Tx = mapping.FirstOrDefault(kv => kv.Value == "TX").Key ?? "",
+                    Rx = mapping.FirstOrDefault(kv => kv.Value == "RX").Key ?? ""
+                };
 
-        if (!lastUsedUartMapping.IsValid()) {
-            MessageBox.Show("Mapování UART signálů není validní (TX a RX musí být různé a neprázdné).", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
-            return;
+                if (!lastUsedUartMapping.IsValid())
+                {
+                    MessageBox.Show("Mapování UART signálů není validní (TX a RX musí být různé a neprázdné).", "Chyba", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                renameMap = mapping;
+
+                // Vypocet offsetu pro anotace
+                var roleToIndex = uartDialog.RoleToIndex;
+                double spacing = 0.2, baseHeight = 1.2;
+                channelOffsets = roleToIndex.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => -kvp.Value * (baseHeight + spacing)
+                );
+
+                var remapped = loader.SignalData.ToDictionary(
+                    kvp => renameMap.TryGetValue(kvp.Key, out var newName) ? newName : kvp.Key,
+                    kvp => kvp.Value
+                );
+
+                loader.ClearSignalData();
+                foreach (var kvp in remapped)
+                    loader.AddSignalData(kvp.Key, kvp.Value);
+
+                plotter.RenameChannels(renameMap);
+            }
+
+            else if (selectedProtocol == "SPI")
+            {
+                var spiDialog = new SpiChannelMappingDialog(availableChannels) { Owner = this };
+                if (spiDialog.ShowDialog() != true)
+                    return;
+
+                lastUsedSpiMapping = spiDialog.Mapping;
+
+                // === prejmenovani signalu hned po nacteni ===
+                renameMap = new Dictionary<string, string>();
+
+                if (!string.IsNullOrEmpty(lastUsedSpiMapping.ChipSelect))
+                    renameMap[lastUsedSpiMapping.ChipSelect] = "CS";
+
+                if (!string.IsNullOrEmpty(lastUsedSpiMapping.Clock))
+                    renameMap[lastUsedSpiMapping.Clock] = "SCLK";
+
+                if (!string.IsNullOrEmpty(lastUsedSpiMapping.Mosi))
+                    renameMap[lastUsedSpiMapping.Mosi] = "MOSI";
+
+                if (!string.IsNullOrEmpty(lastUsedSpiMapping.Miso))
+                    renameMap[lastUsedSpiMapping.Miso] = "MISO";
+
+                // === Premapuj data ihned, aby se dala pouzit pro inferenci ===
+                var remapped = loader.SignalData.ToDictionary(
+                    kvp => renameMap.TryGetValue(kvp.Key, out var newName) ? newName : kvp.Key,
+                    kvp => kvp.Value
+                );
+
+                loader.ClearSignalData();
+                foreach (var kvp in remapped)
+                    loader.AddSignalData(kvp.Key, kvp.Value);
+
+                lastUsedSpiMapping.ChipSelect = "CS";
+                lastUsedSpiMapping.Clock = "SCLK";
+                lastUsedSpiMapping.Mosi = "MOSI";
+                lastUsedSpiMapping.Miso = string.IsNullOrEmpty(lastUsedSpiMapping.Miso) ? "" : "MISO";
+
+                plotter.RenameChannels(renameMap);
+
+                Console.WriteLine("[Analyze] --- Kanály po přemapování (pro legendu) ---");
+                foreach (var key in loader.SignalData.Keys)
+                    Console.WriteLine($"  {key}");
+
+                // Vypocet offsetu pro anotace
+                var roleToIndex = spiDialog.RoleToIndex;
+                double spacing = 0.2, baseHeight = 1.2;
+                channelOffsets = roleToIndex.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => -kvp.Value * (baseHeight + spacing)
+                );
+
+                Console.WriteLine("[Analyze] --- SPI channelOffsets ---");
+                foreach (var kvp in channelOffsets)
+                    Console.WriteLine($"  {kvp.Key} => offset {kvp.Value:F2}");
+            }
+
+            // === Spusteni analyzy ===
+            bool isManual = ManualRadio.IsChecked == true;
+            wasManualAnalysis = isManual;
+
+            if (!CheckChannelCount(selectedProtocol, loader.SignalData.Count))
+                return;
+
+            if (activeAnalyzer != null)
+                ClearPreviousAnalysis();
+
+            var analyzer = protocolAnalysisService.Analyze(
+                selectedProtocol,
+                isManual,
+                loader,
+                lastUsedUartMapping,
+                ref lastUsedSpiMapping,
+                this
+            );
+
+            if (analyzer != null) {
+                analyzer.Analyze();
+                SetAnalyzer(analyzer);
+                UpdateStatistics();
+                UpdateAnnotations();
+                MessageBox.Show($"{analyzer.ProtocolName} analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
-
-        renameMap = mapping;
-
-        // Výpočet offsetů pro anotace
-        var roleToIndex = uartDialog.RoleToIndex;
-        double spacing = 0.2, baseHeight = 1.2;
-        channelOffsets = roleToIndex.ToDictionary(
-            kvp => kvp.Key,
-            kvp => -kvp.Value * (baseHeight + spacing)
-        );
-    }
-
-    else if (selectedProtocol == "SPI") {
-        var spiDialog = new SpiChannelMappingDialog(availableChannels) { Owner = this };
-    if (spiDialog.ShowDialog() != true)
-        return;
-
-    lastUsedSpiMapping = spiDialog.Mapping;
-
-    // === Přejmenuj signály hned po načtení mapování ===
-    renameMap = new Dictionary<string, string>();
-
-    if (!string.IsNullOrEmpty(lastUsedSpiMapping.ChipSelect))
-        renameMap[lastUsedSpiMapping.ChipSelect] = "CS";
-
-    if (!string.IsNullOrEmpty(lastUsedSpiMapping.Clock))
-        renameMap[lastUsedSpiMapping.Clock] = "SCLK";
-
-    if (!string.IsNullOrEmpty(lastUsedSpiMapping.Mosi))
-        renameMap[lastUsedSpiMapping.Mosi] = "MOSI";
-
-    if (!string.IsNullOrEmpty(lastUsedSpiMapping.Miso))
-        renameMap[lastUsedSpiMapping.Miso] = "MISO";
-
-    // === Premapuj data ihned, aby se dala použít pro inferenci ===
-    var remapped = loader.SignalData.ToDictionary(
-        kvp => renameMap.TryGetValue(kvp.Key, out var newName) ? newName : kvp.Key,
-        kvp => kvp.Value
-    );
-
-    loader.ClearSignalData();
-    foreach (var kvp in remapped)
-        loader.AddSignalData(kvp.Key, kvp.Value);
-
-    // také přejmenuj mapování, aby odpovídalo novým názvům
-    lastUsedSpiMapping.ChipSelect = "CS";
-    lastUsedSpiMapping.Clock = "SCLK";
-    lastUsedSpiMapping.Mosi = "MOSI";
-    lastUsedSpiMapping.Miso = string.IsNullOrEmpty(lastUsedSpiMapping.Miso) ? "" : "MISO";
-
-    plotter.RenameChannels(renameMap);
-
-        Console.WriteLine("[Analyze] --- Kanály po přemapování (pro legendu) ---");
-        foreach (var key in loader.SignalData.Keys)
-            Console.WriteLine($"  {key}");
-
-        // Výpočet offsetů pro anotace
-        var roleToIndex = spiDialog.RoleToIndex;
-        double spacing = 0.2, baseHeight = 1.2;
-        channelOffsets = roleToIndex.ToDictionary(
-            kvp => kvp.Key,
-            kvp => -kvp.Value * (baseHeight + spacing)
-        );
-
-        Console.WriteLine("[Analyze] --- SPI channelOffsets ---");
-        foreach (var kvp in channelOffsets)
-            Console.WriteLine($"  {kvp.Key} => offset {kvp.Value:F2}");
-    }
-
-    // === Spuštění analýzy ===
-    bool isManual = ManualRadio.IsChecked == true;
-    wasManualAnalysis = isManual;
-
-    if (!CheckChannelCount(selectedProtocol, loader.SignalData.Count))
-        return;
-
-    if (activeAnalyzer != null)
-        ClearPreviousAnalysis();
-
-    var analyzer = protocolAnalysisService.Analyze(
-        selectedProtocol,
-        isManual,
-        loader,
-        lastUsedUartMapping,
-        ref lastUsedSpiMapping,
-        this
-    );
-
-    if (analyzer != null) {
-        analyzer.Analyze();
-        SetAnalyzer(analyzer);
-        UpdateStatistics();
-        UpdateAnnotations();
-        MessageBox.Show($"{analyzer.ProtocolName} analýza dokončena.", "Výsledek", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-}
 
 
         /// <summary>

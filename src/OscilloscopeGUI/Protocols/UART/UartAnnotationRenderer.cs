@@ -33,7 +33,7 @@ public class UartAnnotationRenderer : IAnnotationRenderer {
             if (!printedHeader) {
                 //Console.WriteLine("[UartAnnotationRenderer] --- Dostupne offsety ---");
                 foreach (var kvp in channelOffsets)
-                    Console.WriteLine($"  {kvp.Key} => {kvp.Value:F2}");
+                    //Console.WriteLine($"  {kvp.Key} => {kvp.Value:F2}");
                 printedHeader = true;
             }
 
