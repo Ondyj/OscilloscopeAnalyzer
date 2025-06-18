@@ -201,24 +201,24 @@ namespace OscilloscopeGUI {
         /// <summary>
         /// Aktualizuje anotace v grafu podle aktualne vybraneho analyzatoru
         /// </summary>
-private void UpdateAnnotations() {
-    // Smazat predchozi anotace
-    foreach (var label in byteLabels)
-        plot.Plot.Remove(label);
-    byteLabels.Clear();
+        private void UpdateAnnotations() {
+            // Smazat predchozi anotace
+            foreach (var label in byteLabels)
+                plot.Plot.Remove(label);
+            byteLabels.Clear();
 
-    foreach (var line in byteStartLines)
-        plot.Plot.Remove(line);
-    byteStartLines.Clear();
+            foreach (var line in byteStartLines)
+                plot.Plot.Remove(line);
+            byteStartLines.Clear();
 
-    if (activeAnalyzer is null)
-        return;
+            if (activeAnalyzer is null)
+                return;
 
-    var renderer = annotationRendererManager.GetRendererFor(activeAnalyzer);
-    renderer?.Render(activeAnalyzer, plot.Plot, currentFormat, byteLabels, byteStartLines, channelOffsets);
+            var renderer = annotationRendererManager.GetRendererFor(activeAnalyzer);
+            renderer?.Render(activeAnalyzer, plot.Plot, currentFormat, byteLabels, byteStartLines, channelOffsets);
 
-    plot.Refresh();
-}
+            plot.Refresh();
+        }
 
         private void ClearPreviousAnalysis() {
             filteredUartBytes = null;

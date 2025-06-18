@@ -38,7 +38,7 @@ public class SpiExporter {
             writer.WriteLine($"# Odhad rychlosti: {analyzer.EstimatedBitRate:F0} bps (bit: {analyzer.EstimatedBitTimeUs:F2} µs)");
             writer.WriteLine($"# Přenosů: {analyzer.TransferCount}");
             writer.WriteLine($"# Průměrná délka přenosu: {analyzer.AvgTransferDurationUs:F1} µs");
-            writer.WriteLine($"# MOSI / MISO bajtů: {analyzer.TotalBytes - analyzer.MisoByteCount} / {analyzer.MisoByteCount}");
+            writer.WriteLine($"# MOSI / MISO bajtů: {analyzer.MosiByteCount} / {analyzer.MisoByteCount}");
             if (analyzer.HasChipSelect) {
                 writer.WriteLine($"# Průměrná mezera mezi CS: {analyzer.AvgCsGapUs:F1} µs");
                 writer.WriteLine($"# Zpoždění první hrany hodin: {analyzer.AvgDelayToFirstEdgeUs:F1} µs");

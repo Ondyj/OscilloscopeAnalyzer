@@ -7,8 +7,7 @@ namespace OscilloscopeCLI.Protocols {
         /// </summary>
         public static SpiSettings InferSettings(
             Dictionary<string, List<(double Time, double Value)>> signalData,
-            SpiChannelMapping mapping)
-        {
+            SpiChannelMapping mapping) {
             if (!signalData.ContainsKey(mapping.Clock))
                 throw new InvalidOperationException("Zadaný kanál SCLK nebyl nalezen v datech.");
 
@@ -25,8 +24,7 @@ namespace OscilloscopeCLI.Protocols {
 
             List<(double StartTime, double EndTime)> activeWindows;
 
-            if (!string.IsNullOrEmpty(mapping.ChipSelect) && signalData.ContainsKey(mapping.ChipSelect))
-            {
+            if (!string.IsNullOrEmpty(mapping.ChipSelect) && signalData.ContainsKey(mapping.ChipSelect)) {
                 var csAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.ChipSelect);
                 var csSegments = csAnalyzer.GetConstantLevelSegments();
 
@@ -34,22 +32,14 @@ namespace OscilloscopeCLI.Protocols {
                     .Where(s => s.Value == 0)
                     .Select(s => (s.StartTime, s.EndTime))
                     .ToList();
-
-                //Console.WriteLine($"[SPI][Inference] Nalezeno {activeWindows.Count} aktivních CS segmentů.");
-                //foreach (var s in activeWindows)
-                    //Console.WriteLine($"[SPI][CS] Aktivní od {s.StartTime:F9}s do {s.EndTime:F9}s");
-            }
-            else
-            {
+            } else {
                 double start = sclkSamples.First().Timestamp;
                 double end = sclkSamples.Last().Timestamp;
-                //Console.WriteLine("[SPI][Inference] Žádný CS – používám celý rozsah signálu.");
                 activeWindows = new() { (start, end) };
             }
 
             int edgeIdx = 0;
-            foreach (var window in activeWindows)
-            {
+            foreach (var window in activeWindows) {
                 while (edgeIdx < allEdges.Count && allEdges[edgeIdx].Timestamp < window.StartTime)
                     edgeIdx++;
 
@@ -75,10 +65,6 @@ namespace OscilloscopeCLI.Protocols {
                 int bitsInThisWindow = EstimateBitsPerTransfer(edgesInWindow);
                 bitsPerTransfer.Add(bitsInThisWindow);
 
-                //Console.WriteLine($"[SPI][Window] {window.StartTime:F6}s - {window.EndTime:F6}s");
-                //Console.WriteLine($"  - Hran: {edgesInWindow.Count}");
-                //Console.WriteLine($"  - CPOL: {(firstState ? "HIGH" : "LOW")}");
-                //Console.WriteLine($"  - Pozice první hrany: {position:P1} → CPHA: {(cphaEstimate ? "1" : "0")}");
             }
 
             // Fallback pro pripad, ze zadne validni okno nebylo nalezeno
@@ -89,11 +75,7 @@ namespace OscilloscopeCLI.Protocols {
                 bool fallbackCpol = sclkSamples.First().State;
                 int fallbackBits = allEdges.Count;
 
-                //Console.WriteLine("[SPI][Warning] Žádná validní přenosová okna – fallback režim.");
-                //Console.WriteLine($"[SPI][Fallback] Hran: {fallbackBits}, CPOL: {(fallbackCpol ? "1" : "0")}");
-
-                return new SpiSettings
-                {
+                return new SpiSettings {
                     Cpol = fallbackCpol,
                     Cpha = false,
                     BitsPerWord = fallbackBits > 0 && fallbackBits < 64 ? fallbackBits : 8
@@ -104,54 +86,52 @@ namespace OscilloscopeCLI.Protocols {
             bool finalCpha = cphaEstimates.Count(v => v) > cphaEstimates.Count / 2.0;
             int bitsPerWordEstimate = (int)Math.Round(bitsPerTransfer.Average());
 
-            //Console.WriteLine($"[SPI][Inference] Finální CPOL: {(finalCpol ? "1 (HIGH)" : "0 (LOW)")}");
-            //Console.WriteLine($"[SPI][Inference] Finální CPHA: {(finalCpha ? "1" : "0")}");
-            //Console.WriteLine($"[SPI][Inference] Průměrný počet hran (bitů): {bitsPerWordEstimate}");
-
-            return new SpiSettings
-            {
+            return new SpiSettings {
                 Cpol = finalCpol,
                 Cpha = finalCpha,
                 BitsPerWord = bitsPerWordEstimate
             };
         }
 
-private static int EstimateBitsPerTransfer(List<SignalSample> edges)
-{
-    if (edges.Count < 8)
-        return 8; // výchozi hodnota, pokud malo hran
+        /// <summary>
+        /// Odhadne pocet bitu na prenos ze seznamu hran hodinoveho signalu
+        /// </summary>
+        private static int EstimateBitsPerTransfer(List<SignalSample> edges) {
+            if (edges.Count < 8)
+                return 8; // vychozi hodnota, pokud malo hran
 
-    var intervals = new List<double>();
-    for (int i = 1; i < edges.Count; i++) {
-        double delta = edges[i].Timestamp - edges[i - 1].Timestamp;
-        if (delta > 0)
-            intervals.Add(delta);
-    }
+            var intervals = new List<double>();
+            for (int i = 1; i < edges.Count; i++) {
+                double delta = edges[i].Timestamp - edges[i - 1].Timestamp;
+                if (delta > 0)
+                    intervals.Add(delta);
+            }
 
-    if (intervals.Count == 0)
-        return 8;
+            if (intervals.Count == 0)
+                return 8;
 
-    // Detekuj nejcastejsi (modalna) cas mezi hranami
-    double modeInterval = intervals
-        .GroupBy(x => Math.Round(x, 6))
-        .OrderByDescending(g => g.Count())
-        .First().Key;
+            // Detekuj nejcastejsi (modalne) cas mezi hranami
+            double modeInterval = intervals
+                .GroupBy(x => Math.Round(x, 6))
+                .OrderByDescending(g => g.Count())
+                .First().Key;
 
-    // Urci prumerne trvani prenosoveho okna
-    double avgWindowDuration = edges.Last().Timestamp - edges.First().Timestamp;
-    int bits = (int)Math.Round(avgWindowDuration / modeInterval);
+            // Urci prumerne trvani prenosoveho okna
+            double avgWindowDuration = edges.Last().Timestamp - edges.First().Timestamp;
+            int bits = (int)Math.Round(avgWindowDuration / modeInterval);
 
-    if (bits >= 1 && bits <= 64)
-        return bits;
+            if (bits >= 1 && bits <= 64)
+                return bits;
 
-    return 8; // fallback
-}
+            return 8; // fallback
+        }
 
-        public static int BinarySearchTimestamp(this List<SignalSample> samples, double timestamp)
-        {
+        /// <summary>
+        /// Vyhleda index vzorku s nejblizsi casovou znackou mensi nebo rovnou zadanemu timestampu
+        /// </summary>
+        public static int BinarySearchTimestamp(this List<SignalSample> samples, double timestamp) {
             int low = 0, high = samples.Count - 1;
-            while (low <= high)
-            {
+            while (low <= high) {
                 int mid = (low + high) / 2;
                 if (samples[mid].Timestamp < timestamp)
                     low = mid + 1;
@@ -161,13 +141,13 @@ private static int EstimateBitsPerTransfer(List<SignalSample> edges)
             return Math.Max(0, low - 1);
         }
 
-        private static List<SignalSample> DetectTransitions(List<SignalSample> samples)
-        {
+        /// <summary>
+        /// Detekuje prechody v digitalnim signalu (zmena stavu 0 ↔ 1)
+        /// </summary>
+        private static List<SignalSample> DetectTransitions(List<SignalSample> samples) {
             var transitions = new List<SignalSample>();
-            for (int i = 1; i < samples.Count; i++)
-            {
-                if (samples[i].State != samples[i - 1].State)
-                {
+            for (int i = 1; i < samples.Count; i++) {
+                if (samples[i].State != samples[i - 1].State) {
                     transitions.Add(samples[i]);
                 }
             }

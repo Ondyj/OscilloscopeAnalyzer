@@ -8,25 +8,19 @@ namespace OscilloscopeCLI.Protocols {
         /// <summary>
         /// Odhadne zakladni nastaveni UART protokolu ze vzorku signalu.
         /// </summary>
-        public static UartSettings InferUartSettings(List<SignalSample> samples)
-        {
-            //Console.WriteLine("[UART][Inference] Zacatek odhadu nastaveni UART...");
+        public static UartSettings InferUartSettings(List<SignalSample> samples) {
             var transitions = DetectTransitions(samples);
 
-            //Console.WriteLine($"[UART][Inference] Nalezeno {transitions.Count} prechodu v signalu.");
 
             if (transitions.Count < 5)
                 throw new InvalidOperationException("Nedostatek přechodů pro odhad přenosové rychlosti.");
 
             // Odhad delky bitu (z prvnich nekolika prechodu)
             var bitDurations = new List<double>();
-            for (int i = 1; i < Math.Min(transitions.Count, 10); i++)
-            {
+            for (int i = 1; i < Math.Min(transitions.Count, 10); i++) {
                 double delta = transitions[i].Timestamp - transitions[i - 1].Timestamp;
-                if (delta > 0)
-                {
+                if (delta > 0) {
                     bitDurations.Add(delta);
-                    //Console.WriteLine($"[UART][Inference] Delta #{i}: {delta:F9} s");
                 }
             }
 
@@ -35,17 +29,13 @@ namespace OscilloscopeCLI.Protocols {
 
             double averageBitTime = EstimateBitTimeFiltered(transitions);
             int baudRate = (int)Math.Round(1.0 / averageBitTime);
-            //Console.WriteLine($"[UART][Inference] Prumerna delka bitu: {averageBitTime:F9} s");
-            //Console.WriteLine($"[UART][Inference] Odhadnuty baud rate: {baudRate} baud");
 
             // Odhad idle urovne (HIGH pokud je vetsina vzorku log. 1)
             int highCount = samples.Count(s => s.State);
             bool idleHigh = highCount > (samples.Count / 2);
-            //Console.WriteLine($"[UART][Inference] Idle uroven: {(idleHigh ? "HIGH (log. 1)" : "LOW (log. 0)")}, pomer: {(double)highCount / samples.Count:P2}");
 
             // Odhad bitu
             int dataBits = InferDataBits(samples, averageBitTime, idleHigh);
-            //Console.WriteLine($"[UART][Inference] Odhadnuty pocet datovych bitu: {dataBits}");
 
             // Odhad parity
             Parity parity = InferParity(samples, averageBitTime, dataBits, idleHigh);
@@ -55,8 +45,7 @@ namespace OscilloscopeCLI.Protocols {
             int stopBits = InferStopBits(samples, averageBitTime, dataBits, parity, idleHigh);
             //Console.WriteLine($"[UART][Inference] Odhadnuty pocet stop bitu: {stopBits}");
 
-            return new UartSettings
-            {
+            return new UartSettings {
                 BaudRate = baudRate,
                 DataBits = dataBits, // defaultni hodnota
                 Parity = parity,
@@ -65,11 +54,14 @@ namespace OscilloscopeCLI.Protocols {
             };
         }
 
+        /// <summary>
+        /// Odhadne prumernou delku bitu na zaklade kratkych casovych intervalu mezi prechody.
+        /// Filtruje pouze hodnoty v realistickem rozsahu.
+        /// </summary>
         private static double EstimateBitTimeFiltered(List<SignalSample> transitions) {
             var bitDurations = new List<double>();
 
-            for (int i = 1; i < transitions.Count; i++)
-            {
+            for (int i = 1; i < transitions.Count; i++) {
                 double delta = transitions[i].Timestamp - transitions[i - 1].Timestamp;
 
                 // Odfiltrujeme nesmyslne dlouhe prechody
@@ -81,11 +73,13 @@ namespace OscilloscopeCLI.Protocols {
                 throw new InvalidOperationException("Nelze odhadnout délku bitu – žádné krátké přechody.");
 
             double average = bitDurations.Average();
-            //Console.WriteLine($"[UART][FilteredInference] Použito {bitDurations.Count} přechodů. Průměrná bitTime: {average:F9} s");
 
             return average;
         }
 
+        /// <summary>
+        /// Odhadne pocet datovych bitu podle validace stop bitu pro ruzne mozne delky.
+        /// </summary>
         private static int InferDataBits(List<SignalSample> samples, double bitTime, bool idleLevelHigh) {
             Dictionary<int, int> validCounts = new();
 
@@ -110,22 +104,16 @@ namespace OscilloscopeCLI.Protocols {
                 }
             }
 
-            //Console.WriteLine("[UART][DataBitsInference] Pocty validnich stop bitu pro jednotlive delky:");
-            foreach (var kvp in validCounts.OrderBy(k => k.Key)) {
-                //Console.WriteLine($"  - {kvp.Key} dat. bitu: {kvp.Value}x");
-            }
-
             int bestBits = validCounts.OrderByDescending(kvp => kvp.Value).First().Key;
-            //Console.WriteLine($"[UART][DataBitsInference] Nejvice validnich stop bitu pro {bestBits} datovych bitu ({validCounts[bestBits]}x)");
-
             return bestBits;
         }
 
-        private static bool GetBitAtTime(List<SignalSample> samples, double timestamp)
-        {
+        /// <summary>
+        /// Ziska logicky stav signalu v danem case (binary search).
+        /// </summary>
+        private static bool GetBitAtTime(List<SignalSample> samples, double timestamp) {
             int low = 0, high = samples.Count - 1;
-            while (low <= high)
-            {
+            while (low <= high) {
                 int mid = (low + high) / 2;
                 if (samples[mid].Timestamp < timestamp) low = mid + 1;
                 else high = mid - 1;
@@ -133,24 +121,23 @@ namespace OscilloscopeCLI.Protocols {
             return samples[Math.Max(0, low - 1)].State;
         }
 
-        private static Parity InferParity(List<SignalSample> samples, double bitTime, int dataBits, bool idleLevelHigh)
-        {
+        /// <summary>
+        /// Odhadne paritu (None, Even, Odd) podle porovnani skutecneho a ocekavaneho paritniho bitu.
+        /// </summary>
+        private static Parity InferParity(List<SignalSample> samples, double bitTime, int dataBits, bool idleLevelHigh) {
             int evenOk = 0, oddOk = 0, noneOk = 0;
             int checkedFrames = 0;
 
-            for (int i = 1; i < samples.Count; i++)
-            {
+            for (int i = 1; i < samples.Count; i++) {
                 var prev = samples[i - 1];
                 var curr = samples[i];
 
-                if (prev.State == idleLevelHigh && curr.State != idleLevelHigh)
-                {
+                if (prev.State == idleLevelHigh && curr.State != idleLevelHigh) {
                     double startTime = curr.Timestamp;
                     byte value = 0;
 
                     // nacti datove bity
-                    for (int bit = 0; bit < dataBits; bit++)
-                    {
+                    for (int bit = 0; bit < dataBits; bit++) {
                         double t = startTime + ((bit + 1.5) * bitTime);
                         if (GetBitAtTime(samples, t))
                             value |= (byte)(1 << bit);
@@ -178,13 +165,14 @@ namespace OscilloscopeCLI.Protocols {
                 }
             }
 
-            //Console.WriteLine($"[UART][ParityInference] Even OK: {evenOk}, Odd OK: {oddOk}, None OK: {noneOk}");
-
             if (evenOk >= oddOk && evenOk >= noneOk) return Parity.Even;
             if (oddOk >= evenOk && oddOk >= noneOk) return Parity.Odd;
             return Parity.None;
         }
 
+        /// <summary>
+        /// Odhadne pocet stop bitu podle delky logicke urovne po paritnim/datum bitu.
+        /// </summary>
         private static int InferStopBits(List<SignalSample> samples, double bitTime, int dataBits, Parity parity, bool idleLevelHigh) {
             List<int> stopBitCounts = new();
 
@@ -218,7 +206,6 @@ namespace OscilloscopeCLI.Protocols {
             }
 
             if (stopBitCounts.Count == 0) {
-                //Console.WriteLine("[UART][StopBitsInference] Nelze spolehlivě odhadnout stop bity, defaultuji na 1");
                 return 1;
             }
 
@@ -227,7 +214,6 @@ namespace OscilloscopeCLI.Protocols {
                 .OrderByDescending(g => g.Count())
                 .First().Key;
 
-            //Console.WriteLine($"[UART][StopBitsInference] Nejčastější délka stop bitů: {mostCommon} bity (ze {stopBitCounts.Count} vzorků)");
             return mostCommon;
         }
 
@@ -241,7 +227,6 @@ namespace OscilloscopeCLI.Protocols {
                 if (samples[i].State != samples[i - 1].State)
                 {
                     transitions.Add(samples[i]);
-                   // Console.WriteLine($"[UART][Transition] {samples[i - 1].Timestamp:F9}s -> {samples[i].Timestamp:F9}s : {samples[i - 1].State} → {samples[i].State}");
                 }
             }
             return transitions;

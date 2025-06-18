@@ -32,17 +32,14 @@ public class SpiMatchSearcher {
             .ToList();
 
         // hledani vseho
-        if (sequence == null || sequence.Length == 0)
-        {
+        if (sequence == null || sequence.Length == 0) {
             matches.AddRange(filtered);
             return;
         }
 
-        for (int i = 0; i <= filtered.Count - sequence.Length; i++)
-        {
+        for (int i = 0; i <= filtered.Count - sequence.Length; i++) {
             bool match = true;
-            for (int j = 0; j < sequence.Length; j++)
-            {
+            for (int j = 0; j < sequence.Length; j++) {
                 byte valMosi = filtered[i + j].ValueMOSI;
                 byte valMiso = filtered[i + j].ValueMISO;
 

@@ -31,6 +31,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
     public double EstimatedBitRate { get; private set; }
     public double EstimatedBitTimeUs { get; private set; }
     public int MisoByteCount { get; private set; }
+    public int MosiByteCount { get; private set; }
     public double MinCsGapUs { get; private set; }
     public double MaxCsGapUs { get; private set; }
     public double AvgDelayToFirstEdgeUs { get; private set; }
@@ -75,7 +76,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         if (hasMiso)
             misoAnalyzer = new DigitalSignalAnalyzer(signalData, mapping.Miso!);
 
-        // Detekuj pouze relevantní hrany dle CPOL/CPHA
+        // Detekuj pouze relevantni hrany dle CPOL/CPHA
         var sclkEdges = sclkAnalyzer.DetectTransitions().Where(t => {
             if (!settings.Cpha)
                 return settings.Cpol ? t.From == 1 && t.To == 0 : t.From == 0 && t.To == 1;
@@ -83,7 +84,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
                 return settings.Cpol ? t.From == 0 && t.To == 1 : t.From == 1 && t.To == 0;
         }).ToList();
 
-        // Získání CS přenosových oken
+        // Ziskani CS prenosovych oken
         List<(double StartTime, double EndTime)> transferWindows;
         if (csAnalyzer != null) {
             transferWindows = csAnalyzer.GetConstantLevelSegments().Where(seg => seg.Value == 0)
@@ -125,7 +126,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
             AnalyzeTransfer(edges, mosiReader, misoReader, startTime, endTime);
         }
 
-        // Obecné statistiky
+        // Obecne statistiky
         TransferCount = transferWindows.Count;
         AvgTransferDurationUs = transferWindows.Count > 0 ? transferWindows.Average(t => (t.EndTime - t.StartTime) * 1e6) : 0.0;
 
@@ -136,6 +137,7 @@ public class SpiProtocolAnalyzer : IProtocolAnalyzer, ISearchableAnalyzer, IExpo
         MaxDurationUs = TotalBytes > 0 ? DecodedBytes.Max(b => (b.EndTime - b.StartTime) * 1e6) : 0;
         EstimatedBitTimeUs = AvgDurationUs > 0 ? (AvgDurationUs / 8.0) : 0;
         EstimatedBitRate = EstimatedBitTimeUs > 0 ? (1_000_000.0 / EstimatedBitTimeUs) : 0;
+        MosiByteCount = DecodedBytes.Count(b => b.Error == null || b.ValueMOSI != 0);
         MisoByteCount = DecodedBytes.Count(b => b.HasMISO);
 
         // Statistiky mezer mezi CS

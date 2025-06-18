@@ -88,7 +88,7 @@ namespace OscilloscopeGUI.Services {
             StatsBaudRate.Text = $"Odhad: {spi.EstimatedBitRate:F0} bps | délka bitu: {spi.EstimatedBitTimeUs:F2} µs";
             StatsMinMaxDuration.Text = $"Délka bajtu (min/max): {spi.MinDurationUs:F1} / {spi.MaxDurationUs:F1} µs";
             StatsSpiTransfers.Text = $"Počet přenosů{(spi.HasChipSelect ? " (CS aktivní)" : " (bez CS)")} : {spi.TransferCount}";
-            StatsMosiMiso.Text = $"Bajty MOSI / MISO: {spi.TotalBytes - spi.MisoByteCount} / {spi.MisoByteCount}";
+            StatsMosiMiso.Text = $"Bajty MOSI / MISO: {spi.MosiByteCount} / {spi.MisoByteCount}";
 
             if (spi.HasChipSelect) {
                 StatsSpiCsGap.Text = $"Průměrná mezera mezi CS: {spi.AvgCsGapUs:F1} µs";

@@ -5,6 +5,16 @@ using ScottPlot.Plottables;
 namespace OscilloscopeGUI;
 
 public class SpiAnnotationRenderer : IAnnotationRenderer {
+
+    /// <summary>
+    /// Vykresli anotace bajtu (texty a svisle cary) do grafu podle SPI analyzy.
+    /// </summary>
+    /// <param name="analyzer">Analyzator SPI protokolu</param>
+    /// <param name="plot">Graf ScottPlot, do ktereho se vykresluje</param>
+    /// <param name="format">Format zobrazeni bajtu (HEX, DEC, ASCII)</param>
+    /// <param name="byteLabels">Seznam textovych popisku, ktery se doplni</param>
+    /// <param name="byteStartLines">Seznam car zacatku bajtu, ktery se doplni</param>
+    /// <param name="channelOffsets">Svisle ofsety jednotlivych kanalu</param>
     public void Render(
         IProtocolAnalyzer analyzer,
         Plot plot,
@@ -19,10 +29,6 @@ public class SpiAnnotationRenderer : IAnnotationRenderer {
         var limits = plot.Axes.GetLimits();
         double xMin = limits.Left, xMax = limits.Right;
 
-       // Console.WriteLine("[SPI Renderer] --- Dostupné offsety ---");
-        /*foreach (var kvp in channelOffsets)
-            Console.WriteLine($"  {kvp.Key} => {kvp.Value:F2}");*/
-
         var bytes = spi.DecodedBytes;
         for (int i = 0; i < bytes.Count; i++) {
             var b = bytes[i];
@@ -34,7 +40,6 @@ public class SpiAnnotationRenderer : IAnnotationRenderer {
             var color = hasError ? Colors.Red : Colors.Black;
 
             double yMosi = channelOffsets.TryGetValue("MOSI", out var mo) ? mo : 0;
-            //Console.WriteLine($"[SPI] Bajt {i} MOSI: yMosi = {yMosi:F2}");
             var textMosi = plot.Add.Text(FormatByte(b.ValueMOSI, format), centerX, yMosi + 1.3);
             textMosi.LabelStyle.FontSize = 16;
             textMosi.LabelStyle.Bold = true;
@@ -43,7 +48,6 @@ public class SpiAnnotationRenderer : IAnnotationRenderer {
 
             if (b.HasMISO) {
                 double yMiso = channelOffsets.TryGetValue("MISO", out var mi) ? mi : 0;
-                //Console.WriteLine($"[SPI] Bajt {i} MISO: yMiso = {yMiso:F2}");
                 var textMiso = plot.Add.Text(FormatByte(b.ValueMISO, format), centerX, yMiso + 1.3);
                 textMiso.LabelStyle.FontSize = 16;
                 textMiso.LabelStyle.Bold = true;
@@ -65,6 +69,12 @@ public class SpiAnnotationRenderer : IAnnotationRenderer {
         }
     }
 
+    /// <summary>
+    /// Prevede bajt na retezec podle zvoleneho formatu zobrazeni.
+    /// </summary>
+    /// <param name="b">Dekodovana hodnota bajtu</param>
+    /// <param name="format">Zvoleny format (HEX, DEC, ASCII)</param>
+    /// <returns>Textova reprezentace bajtu</returns>
     private string FormatByte(byte b, ByteDisplayFormat format) => format switch {
         ByteDisplayFormat.Hex => $"0x{b:X2}",
         ByteDisplayFormat.Dec => b.ToString(),

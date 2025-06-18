@@ -4,8 +4,7 @@ namespace OscilloscopeGUI.Plotting {
     /// <summary>
     /// Trida zodpovedna za vykresleni signalu do ScottPlot grafu
     /// </summary>
-    public class SignalPlotter
-    {
+    public class SignalPlotter {
         private readonly WpfPlot plot;
         public double EarliestTime { get; private set; } = 0;
         private Dictionary<string, double> channelOffsets = new();
@@ -14,8 +13,7 @@ namespace OscilloscopeGUI.Plotting {
         /// Konstruktor prijimajici ovladaci prvek WpfPlot
         /// </summary>
         /// <param name="plotControl">Instance grafu, do ktereho se bude vykreslovat</param>
-        public SignalPlotter(WpfPlot plotControl)
-        {
+        public SignalPlotter(WpfPlot plotControl) {
             plot = plotControl;
         }
 
@@ -27,10 +25,8 @@ namespace OscilloscopeGUI.Plotting {
              Dictionary<string, List<(double Time, double Value)>> signalData, Dictionary<string, string>? channelRenames = null,
              IProgress<int>? progress = null,
              int chunkSize = 100_000,
-             CancellationToken cancellationToken = default)
-        {
-            await Task.Run(async () =>
-            {
+             CancellationToken cancellationToken = default) {
+            await Task.Run(async () => {
                 plot.Dispatcher.Invoke(() => plot.Plot.Clear());
 
                 double offset = 0;
@@ -46,8 +42,7 @@ namespace OscilloscopeGUI.Plotting {
                 int totalChannels = signalData.Count;
                 int currentChannel = 0;
 
-                foreach (var channel in signalData)
-                {
+                foreach (var channel in signalData) {
                     cancellationToken.ThrowIfCancellationRequested(); // cancel
 
                     string channelName = channel.Key;
@@ -70,8 +65,7 @@ namespace OscilloscopeGUI.Plotting {
                     int totalChunks = (int)Math.Ceiling((double)simplified.times.Length / chunkSize);
                     int processedChunks = 0;
 
-                    for (int i = 0; i < simplified.times.Length; i += chunkSize)
-                    {
+                    for (int i = 0; i < simplified.times.Length; i += chunkSize) {
                         cancellationToken.ThrowIfCancellationRequested(); // cancel
 
                         int count = Math.Min(chunkSize, simplified.times.Length - i);
@@ -95,8 +89,7 @@ namespace OscilloscopeGUI.Plotting {
                         await Task.Delay(1);
                     }
 
-                    plot.Dispatcher.Invoke(() =>
-                    {
+                    plot.Dispatcher.Invoke(() => {
                         var lowerLine = plot.Plot.Add.HorizontalLine(offset - spacing);
                         lowerLine.Color = new ScottPlot.Color(128, 128, 128, 128);
 
@@ -110,8 +103,7 @@ namespace OscilloscopeGUI.Plotting {
                     progress?.Report((int)((currentChannel / (double)totalChannels) * 100));
                 }
 
-                plot.Dispatcher.Invoke(() =>
-                {
+                plot.Dispatcher.Invoke(() => {
                     plot.Plot.ShowLegend();
                     plot.Refresh();
                 });
@@ -121,13 +113,11 @@ namespace OscilloscopeGUI.Plotting {
         /// <summary>
         /// Prevede signal na krokovy tvar (step plot)
         /// </summary>
-        private static void ToStepPoints(List<(double Time, double Value)> input, out double[] steppedX, out double[] steppedY)
-        {
+        private static void ToStepPoints(List<(double Time, double Value)> input, out double[] steppedX, out double[] steppedY) {
             var listX = new List<double>();
             var listY = new List<double>();
 
-            for (int i = 0; i < input.Count - 1; i++)
-            {
+            for (int i = 0; i < input.Count - 1; i++) {
                 var (t1, v1) = input[i];
                 var (t2, _) = input[i + 1];
 
@@ -146,8 +136,7 @@ namespace OscilloscopeGUI.Plotting {
         /// Zjednodusi signal tak, aby obsahoval pouze body na hranach (zmenach hodnoty)
         /// Slouzi ke snizeni poctu bodu u digitalnich signalu bez ztraty tvaru
         /// </summary>
-        private static (double[] times, double[] values) SimplifyToEdges(double[] times, double[] values)
-        {
+        private static (double[] times, double[] values) SimplifyToEdges(double[] times, double[] values) {
             if (times.Length != values.Length || times.Length == 0)
                 return (Array.Empty<double>(), Array.Empty<double>());
 
@@ -157,10 +146,8 @@ namespace OscilloscopeGUI.Plotting {
             simplifiedTimes.Add(times[0]);
             simplifiedValues.Add(values[0]);
 
-            for (int i = 1; i < times.Length; i++)
-            {
-                if (values[i] != values[i - 1])
-                {
+            for (int i = 1; i < times.Length; i++) {
+                if (values[i] != values[i - 1]) {
                     simplifiedTimes.Add(times[i]);
                     simplifiedValues.Add(values[i - 1]);
 
@@ -178,12 +165,9 @@ namespace OscilloscopeGUI.Plotting {
         /// <summary>
         /// Aktualizuje popisky legendy podle noveho pojmenovani kanalu
         /// </summary>
-        public void RenameChannels(Dictionary<string, string> channelRenames)
-        {
-            plot.Dispatcher.Invoke(() =>
-            {
-                foreach (var plottable in plot.Plot.GetPlottables())
-                {
+        public void RenameChannels(Dictionary<string, string> channelRenames) {
+            plot.Dispatcher.Invoke(() => {
+                foreach (var plottable in plot.Plot.GetPlottables()) {
                     if (plottable is ScottPlot.Plottables.SignalXY signal &&
                         signal.LegendText is string legend && // null-check
                         channelRenames.TryGetValue(legend, out string? newName))

@@ -5,7 +5,10 @@ using ScottPlot.Plottables;
 namespace OscilloscopeGUI;
 
 public class UartAnnotationRenderer : IAnnotationRenderer {
-        public void Render(
+    /// <summary>
+    /// Vykresli anotace bajtu (texty a svisle cary) do grafu podle UART analyzy.
+    /// </summary>
+    public void Render(
         IProtocolAnalyzer analyzer,
         Plot plot,
         ByteDisplayFormat format,
@@ -21,7 +24,6 @@ public class UartAnnotationRenderer : IAnnotationRenderer {
         double xMax = limits.Right;
 
         var bytes = uart.DecodedBytes;
-        bool printedHeader = false;
 
         for (int i = 0; i < bytes.Count; i++) {
             var b = bytes[i];
@@ -30,19 +32,7 @@ public class UartAnnotationRenderer : IAnnotationRenderer {
                 continue;
 
             string channel = b.Channel ?? "null";
-            if (!printedHeader) {
-                //Console.WriteLine("[UartAnnotationRenderer] --- Dostupne offsety ---");
-                foreach (var kvp in channelOffsets)
-                    //Console.WriteLine($"  {kvp.Key} => {kvp.Value:F2}");
-                printedHeader = true;
-            }
-
-            if (!channelOffsets.TryGetValue(channel, out double yOffset)) {
-                //Console.WriteLine($"[UartAnnotationRenderer] Kanal '{channel}' nema offset – anotace se vykresli na 0.0");
-                yOffset = 0;
-            } else {
-                //Console.WriteLine($"[UartAnnotationRenderer] Bajt na kanalu '{channel}' bude vykreslen na y={yOffset:F2}");
-            }
+            double yOffset = channelOffsets.TryGetValue(channel, out double offset) ? offset : 0;
 
             var isError = !string.IsNullOrEmpty(b.Error);
             var color = isError ? Colors.Red : Colors.Black;
@@ -67,6 +57,9 @@ public class UartAnnotationRenderer : IAnnotationRenderer {
         }
     }
 
+    /// <summary>
+    /// Prevede bajt na retezec podle zvoleneho formatu zobrazeni.
+    /// </summary>
     private string FormatByte(byte b, ByteDisplayFormat format) => format switch {
         ByteDisplayFormat.Hex => $"0x{b:X2}",
         ByteDisplayFormat.Dec => b.ToString(),
